@@ -1,7 +1,7 @@
 # IEEE-488.1 traceability
 
 | Standard item | Implementation |
-|---|---|
+| --- | --- |
 | §1.4.3, sixteen signal lines | `ieee488_line_t`, HAL logical-line API |
 | §2.1 functional partition | callbacks separate device functions from interface functions |
 | §2.3 SH | `source()`, states `SIDS/SDYS/STRS/SWNS`; DAV/DIO/EOI generation |
@@ -21,7 +21,7 @@
 ## Command table
 
 | Code | Message | Scope/action |
-|---:|---|---|
+| ---: | --- | --- |
 | `0x01` | GTL | addressed listener; RL transition |
 | `0x04` | SDC | addressed listener; selected device clear |
 | `0x05` | PPC | addressed listener; enter parallel-poll configuration |

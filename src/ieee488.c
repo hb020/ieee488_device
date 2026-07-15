@@ -323,7 +323,7 @@ void ieee488_poll(ieee488_device_t* d) {
     if (d->talker == IEEE488_T_SPAS && d->sr == IEEE488_SR_SQRS) d->sr = IEEE488_SR_APRS;
     W(d, IEEE488_SRQ, d->sr == IEEE488_SR_SQRS);
 
-    /* PP1, 2.9: ATN+EOI = IDY. Assert assigned DIO line iff ist == sense. */
+    /* PP1, 2.9: ATN+EOI = IDY. Assert assigned DIO line if ist == sense. */
     bool idy = atn && eoi;
     if (idy && d->pp_configured) {
         d->pp = IEEE488_PP_PPAS;

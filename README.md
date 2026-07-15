@@ -15,7 +15,7 @@ Implemented functions/capabilities:
 - `PP1`, with local configuration support for parallel poll participation (`PPE`/`PPD`) — §2.9
 - `DC1` device clear — §2.10
 - `DT1` device trigger — §2.11
-- all non-controller command decoding from §2.13/Annex E: addresses, `GTL`, `SDC`, `PPC`, `GET`, `LLO`, `DCL`, `PPU`, `SPE`, `SPD`, `UNL`, `UNT`, `PPE`, and `PPD`.
+- all non-controller command decoding from §2.13/ Annex D: addresses, `GTL`, `SDC`, `PPC`, `GET`, `LLO`, `DCL`, `PPU`, `SPE`, `SPD`, `UNL`, `UNT`, `PPE`, and `PPD`.
 
 The library deliberately does not implement the `C` function (§2.12), does not drive `ATN`, `IFC`, or `REN`, and ignores `TCT` as required for a non-controller device.
 
@@ -40,11 +40,11 @@ The library deliberately does not implement the `C` function (§2.12), does not 
 | SAD/PPE | `0x60–0x6F` | Secondary addressing or poll enable according to state  |
 | SAD/PPD | `0x70–0x7F` | Secondary addressing or poll disable according to state |
 
-IEEE-488.1 §5.7 requires inappropriate multiline messages to be handshaken but otherwise ignored; the acceptor handshake follows this behavior rather than stalling the bus or reporting a protocol error. 
+IEEE-488.1 §5.7 requires inappropriate multiline messages to be handshaken but otherwise ignored; the acceptor handshake follows this behavior rather than stalling the bus or reporting a protocol error.
 
 ## Electrical/HAL assumptions
 
-IEEE-488 uses negative-true signalling and wired-OR behavior. The HAL uses **logical assertion**, not voltage level: `true` means the message is asserted. The external line interface must meet §3 driver/receiver requirements. `NRFD`, `NDAC`, and `SRQ` must be open-collector/wired-OR. DIO and other output-capable lines require suitable tri-state/open-collector transceivers. 
+IEEE-488 uses negative-true signalling and wired-OR behavior. The HAL uses **logical assertion**, not voltage level: `true` means the message is asserted. The external line interface must meet §3 driver/receiver requirements. `NRFD`, `NDAC`, and `SRQ` must be open-collector/wired-OR. DIO and other output-capable lines require suitable tri-state/open-collector transceivers.
 
 ## Integration
 
