@@ -4,7 +4,7 @@
 
 ieee488_device_t d;
 
-/* Replace with GPIO/transceiver access. */
+/* TODO Replace with GPIO/transceiver access. */
 static bool rd(void* c, ieee488_line_t l) {
     (void)c;
     (void)l;
@@ -43,18 +43,22 @@ static bool tx(void* c, uint8_t* b, bool* end) {
     *end = i == sizeof(s) - 1;
     return true;
 }
+
 static void rx(void* c, uint8_t b, bool end) {
     (void)c;
     printf("RX %02x%s\n", b, end ? " END" : "");
 }
+
 static void clear(void* c, bool selected) {
     (void)c;
     printf("%s clear\n", selected ? "selected" : "universal");
 }
+
 static void trigger(void* c) {
     (void)c;
     puts("trigger");
 }
+
 static uint8_t stb(void* c) {
     (void)c;
     return 0x10;

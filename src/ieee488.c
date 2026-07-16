@@ -285,6 +285,68 @@ static void source(ieee488_device_t* d, bool atn) {
     }
 }
 
+
+// Time critical requirements, see table 39 in IEEE 488.1-1987.pdf
+// most strict is reaction to ATN (200ns max)
+// 
+//    | Function             | Description                  | Time value
+// ---+----------------------+------------------------------+------------
+// t2 | SH, AH, T, L, LE, TE | response to ATN              | <= 200ns
+// t4 | T,TE,L,LE,C,RL       | response to IFC or REN false | <100 µs
+// t5 | PP                   | response to ATN ^ EOI        | <= 200ns
+//
+// ATN and EOI reactions are handled in an interrupt handler for t2/t5 compliance.
+
+static void atn_interrupt_handler(ieee488_device_t* d, bool atn, bool eoi) {
+    /* t2, t5: immediate state changes on ATN + EOI transition (must be called from ISR) */
+    // t2: SH, AH, T, L, LE, TE state transition on ATN
+    if (!atn) {
+        /* ATN released: transition addressed talker/listener to active */
+        if (d->talker == IEEE488_T_TADS) d->talker = d->serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
+        if (d->listener == IEEE488_L_LADS) d->listener = IEEE488_L_LACS;
+    } else {
+        /* ATN asserted: transition active talker/listener to addressed */
+        if (d->talker == IEEE488_T_TACS || d->talker == IEEE488_T_SPAS) d->talker = IEEE488_T_TADS;
+        if (d->listener == IEEE488_L_LACS) d->listener = IEEE488_L_LADS;
+    }
+    /* Force source and acceptor to idle on ATN assertion */
+    if (atn) {
+        source_force_idle(d, true);
+        acceptor_force_idle(d);
+    }
+
+    /* t5: PP state transition on ATN ^ EOI */
+
+    bool idy = atn && eoi;
+    if (idy && d->pp_configured) {
+        d->pp = IEEE488_PP_PPAS;
+        uint8_t v = (d->individual_status == d->pp_sense) ? (uint8_t)(1u << (d->pp_line - 1u)) : 0;
+        d->hal.drive_dio(d->hal.ctx, v, v != 0);
+    } else if (d->pp == IEEE488_PP_PPAS && !idy) {
+        d->pp = IEEE488_PP_PPSS;
+        d->hal.drive_dio(d->hal.ctx, 0, false);
+    }
+    if (idy) {
+        W(d, IEEE488_NRFD, true);
+        W(d, IEEE488_NDAC, true);
+    }
+}
+
+
+// This interrupt handler is called when either ATN or EOI changes state.
+// It is expected to be called from an interrupt context, and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
+void ieee488_handle_interrupt(ieee488_device_t* d) {
+    bool atn = R(d, IEEE488_ATN);
+    bool eoi = R(d, IEEE488_EOI);
+    if ((atn != d->last_atn) || (eoi != d->last_eoi)) {
+        d->last_atn = atn;
+        d->last_eoi = eoi;
+        atn_interrupt_handler(d, atn, eoi);
+    }
+}
+
+// TODO make sure that whatever the interrupt handler controls, is compatible with the rest of the code
+
 void ieee488_poll(ieee488_device_t* d) {
     bool ifc = R(d, IEEE488_IFC), atn = R(d, IEEE488_ATN), ren = R(d, IEEE488_REN), eoi = R(d, IEEE488_EOI);
     if (ifc) { /* IFC: T and L return idle within t4, 2.5/2.6; serial poll reset. */
@@ -296,14 +358,6 @@ void ieee488_poll(ieee488_device_t* d) {
     }
     if (d->cfg.talk_only && !ifc) d->talker = IEEE488_T_TADS;
     if (d->cfg.listen_only && !ifc) d->listener = IEEE488_L_LADS;
-
-    if (!atn) {
-        if (d->talker == IEEE488_T_TADS) d->talker = d->serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
-        if (d->listener == IEEE488_L_LADS) d->listener = IEEE488_L_LACS;
-    } else {
-        if (d->talker == IEEE488_T_TACS || d->talker == IEEE488_T_SPAS) d->talker = IEEE488_T_TADS;
-        if (d->listener == IEEE488_L_LACS) d->listener = IEEE488_L_LADS;
-    }
 
     /* RL1, 2.8: MLA while REN enters remote; REN false returns local unless locked out. */
     if (!ren) {
@@ -323,26 +377,13 @@ void ieee488_poll(ieee488_device_t* d) {
     if (d->talker == IEEE488_T_SPAS && d->sr == IEEE488_SR_SQRS) d->sr = IEEE488_SR_APRS;
     W(d, IEEE488_SRQ, d->sr == IEEE488_SR_SQRS);
 
-    /* PP1, 2.9: ATN+EOI = IDY. Assert assigned DIO line if ist == sense. */
-    bool idy = atn && eoi;
-    if (idy && d->pp_configured) {
-        d->pp = IEEE488_PP_PPAS;
-        uint8_t v = (d->individual_status == d->pp_sense) ? (uint8_t)(1u << (d->pp_line - 1u)) : 0;
-        d->hal.drive_dio(d->hal.ctx, v, v != 0);
-    } else if (d->pp == IEEE488_PP_PPAS) {
-        d->pp = IEEE488_PP_PPSS;
-        d->hal.drive_dio(d->hal.ctx, 0, false);
-    }
-
     /* During a parallel poll AH must not interpret DIO as a command byte. */
+    bool idy = atn && eoi;
     if (!idy)
         acceptor(d, atn);
-    else {
-        W(d, IEEE488_NRFD, true);
-        W(d, IEEE488_NDAC, true);
-    }
+
     source(d, atn);
+
     d->last_ifc = ifc;
-    d->last_atn = atn;
     d->last_dav = R(d, IEEE488_DAV);
 }

@@ -32,12 +32,44 @@ typedef enum {
     IEEE488_LINE_COUNT
 } ieee488_line_t;
 
+/** @brief Hardware Abstraction Layer (HAL) for IEEE 488.1-1987.
+ * The HAL provides the interface between the IEEE 488.1-1987 protocol implementation and the underlying hardware.
+ */
 typedef struct {
+    /** @brief Context pointer for the HAL implementation. */
     void* ctx;
+
+    /** @brief Read the state of a command line (bit).
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param line The line (bit) to read.
+     * @return true if the line is asserted, false otherwise.
+     */
     bool (*read_line)(void* ctx, ieee488_line_t line);
+
+    /** @brief Drive a command line (bit) to asserted or released.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param line The line (bit) to drive.
+     * @param asserted true to assert the line, false to release it.
+     */
     void (*drive_line)(void* ctx, ieee488_line_t line, bool asserted);
+
+    /** @brief Read the state of the digital I/O lines (DIO1-DIO8).
+     * @param ctx The context pointer provided to ieee488_init().
+     * @return The logical state of the DIO lines, bit 0 = DIO1.
+     */
     uint8_t (*read_dio)(void* ctx); /* logical byte: bit 0 = DIO1 */
+
+    /** @brief Drive the digital I/O lines (DIO1-DIO8).
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param value The logical state to drive onto the DIO lines, bit 0 = DIO1.
+     * @param enable true to drive the lines, false to release them.
+     */
     void (*drive_dio)(void* ctx, uint8_t value, bool enable);
+
+    /** @brief Get the time in microseconds since startup.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @return Time in microseconds since startup.
+     */
     uint32_t (*time_us)(void* ctx);
 } ieee488_hal_t;
 
@@ -71,30 +103,74 @@ typedef enum { IEEE488_OK = 0,
 typedef enum { IEEE488_ADDR_NORMAL,
                IEEE488_ADDR_EXTENDED } ieee488_address_mode_t;
 
+/** @brief Configuration for an IEEE 488.1-1987 device. */
 typedef struct {
-    uint8_t primary_address;   /* 0..30; 31 is UNL/UNT */
-    uint8_t secondary_address; /* 0..31, used in extended mode */
-    ieee488_address_mode_t address_mode;
-    bool talk_only;   /* local ton message, 2.5.5 */
-    bool listen_only; /* local lon message, 2.6.5 */
-    bool use_eoi;
-    uint8_t eos_byte;
-    bool eos_enabled;
-    uint32_t handshake_timeout_us; /* 0 = no software timeout */
-    uint32_t t1_delay_us;          /* source settling delay; see 2.3 and 3.8 */
+    uint8_t primary_address;              // 0..30; 31 is UNL/UNT 
+    uint8_t secondary_address;            // 0..31, used in extended mode 
+    ieee488_address_mode_t address_mode;  // IEEE 488.1 address mode (normal or extended)
+    bool talk_only;                       // local ton message, 2.5.5
+    bool listen_only;                     // local lon message, 2.6.5
+    bool use_eoi;                         // EOI line is used to indicate the end of a message (true) or not (false)
+    uint8_t eos_byte;                     // The byte value that indicates the end of a message when EOI is NOT used.
+    bool eos_enabled;                     // True if EOS byte is enabled, false otherwise.
+    uint32_t handshake_timeout_us;        // 0 = no software timeout
+    uint32_t t1_delay_us;                 // source settling delay; see 2.3 and 3.8
 } ieee488_config_t;
 
+/** @brief Callbacks for an IEEE 488.1-1987 device. */
 typedef struct {
     /* Device-dependent data path, outside the standard (1.4.1, 2.1.1). */
+
+    /** @brief Get the next byte for transmission.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param byte Pointer to a byte to be filled with the next byte to transmit.
+     * @param end Pointer to a boolean to be filled with true if this is the last byte of the message, false otherwise.
+     * @return true if a byte was provided, false if there are no more bytes to send.
+     */
     bool (*tx_next)(void* ctx, uint8_t* byte, bool* end);
+
+    /** @brief Handle a received byte.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param byte The received byte.
+     * @param end True if this is the last byte of the message, false otherwise.
+     */
     void (*rx_byte)(void* ctx, uint8_t byte, bool end);
-    uint8_t (*status_byte)(void* ctx); /* STB bits excluding RQS bit 6 */
+
+    /** @brief Get the status byte.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @return The status byte with STB bits excluding RQS bit 6.
+     */
+    uint8_t (*status_byte)(void* ctx);
 
     /* Interface function actions. */
-    void (*device_clear)(void* ctx, bool selected);               /* DC1, 2.10 */
-    void (*device_trigger)(void* ctx);                            /* DT1, 2.11 */
-    void (*remote_changed)(void* ctx, bool remote, bool lockout); /* RL1 */
+    
+    /** @brief Handle a device clear (DC1, 2.10) command.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param selected True if the device is addressed, false if it is a universal clear.
+     */
+    void (*device_clear)(void* ctx, bool selected);
+
+    /** @brief Handle a device trigger (DT1, 2.11) command.
+     * @param ctx The context pointer provided to ieee488_init().
+     */
+    void (*device_trigger)(void* ctx);
+
+    /** @brief Handle a change in the remote/local status. (RL1)
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param remote True if the device is now in remote mode, false if in local mode.
+     * @param lockout True if the device is now in lockout state, false otherwise.
+     */
+    void (*remote_changed)(void* ctx, bool remote, bool lockout); 
+
+    /** @brief Handle a command seen on the bus.
+     * 
+     * Is called before the command is processed.
+     * 
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param command The command byte that was seen.
+     */
     void (*command_seen)(void* ctx, uint8_t command);
+
     void* ctx;
 } ieee488_callbacks_t;
 
@@ -103,70 +179,136 @@ typedef enum { IEEE488_SH_SIDS,
                IEEE488_SH_SDYS,
                IEEE488_SH_STRS,
                IEEE488_SH_SWNS,
-               IEEE488_SH_SIWS } ieee488_sh_state_t;
+               IEEE488_SH_SIWS } ieee488_sh_state_t; /** SH (Source Handshake) states */
+
 typedef enum { IEEE488_AH_AIDS,
                IEEE488_AH_ANRS,
                IEEE488_AH_ACRS,
                IEEE488_AH_ACDS,
-               IEEE488_AH_AWNS } ieee488_ah_state_t;
+               IEEE488_AH_AWNS } ieee488_ah_state_t; /** AH (Acceptor Handshake) states */
+
 typedef enum { IEEE488_T_TIDS,
                IEEE488_T_TADS,
                IEEE488_T_TACS,
-               IEEE488_T_SPAS } ieee488_t_state_t;
+               IEEE488_T_SPAS } ieee488_t_state_t; /** T (Talker) states */
+
 typedef enum { IEEE488_L_LIDS,
                IEEE488_L_LADS,
-               IEEE488_L_LACS } ieee488_l_state_t;
+               IEEE488_L_LACS } ieee488_l_state_t; /** L (Listener) states */
+
 typedef enum { IEEE488_SR_NPRS,
                IEEE488_SR_SQRS,
-               IEEE488_SR_APRS } ieee488_sr_state_t;
+               IEEE488_SR_APRS } ieee488_sr_state_t; /** SR (Service Request) states */
+
 typedef enum { IEEE488_RL_LOCS,
                IEEE488_RL_LWLS,
                IEEE488_RL_REMS,
-               IEEE488_RL_RWLS } ieee488_rl_state_t;
+               IEEE488_RL_RWLS } ieee488_rl_state_t; /** RL (Remote Local) states */
+
 typedef enum { IEEE488_PP_PPIS,
                IEEE488_PP_PPSS,
-               IEEE488_PP_PPAS } ieee488_pp_state_t;
+               IEEE488_PP_PPAS } ieee488_pp_state_t; /** PP (Parallel Poll) states */
 
+/** @brief Internal state of an IEEE 488.1-1987 device. */
 typedef struct ieee488_device {
-    ieee488_hal_t hal;
-    ieee488_config_t cfg;
-    ieee488_callbacks_t cb;
+    ieee488_hal_t hal;       // Hardware Abstraction Layer (HAL) for the device.
+    ieee488_config_t cfg;    // Configuration for the device.
+    ieee488_callbacks_t cb;  // Callbacks for the device.
 
-    ieee488_sh_state_t sh;
-    ieee488_ah_state_t ah;
-    ieee488_t_state_t talker;
-    ieee488_l_state_t listener;
-    ieee488_sr_state_t sr;
-    ieee488_rl_state_t rl;
-    ieee488_pp_state_t pp;
+    ieee488_sh_state_t sh;       // Source Handshake (SH) state.
+    ieee488_ah_state_t ah;       // Acceptor Handshake (AH) state.
+    ieee488_t_state_t talker;    // Talker (T) state.
+    ieee488_l_state_t listener;  // Listener (L) state.
+    ieee488_sr_state_t sr;       // Service Request (SR) state.
+    ieee488_rl_state_t rl;       // Remote Local (RL) state.
+    ieee488_pp_state_t pp;       // Parallel Poll (PP) state.
 
-    bool serial_poll_mode;
-    bool talk_primary_addressed, listen_primary_addressed;
-    bool pp_config_addressed, pp_configured;
-    uint8_t pp_line;
-    bool pp_sense, individual_status;
-    bool service_pending;
+    bool serial_poll_mode;             // true if the device is in serial poll mode, false otherwise.
+    bool talk_primary_addressed;       // true if the device is addressed as a talker, false otherwise.
+    bool listen_primary_addressed;     // true if the device is addressed as a listener, false otherwise.
+    bool pp_config_addressed;          // true if the device is addressed for parallel poll, false otherwise.
+    bool pp_configured;                // true if the device is addressed for parallel poll configuration, false otherwise.
+    uint8_t pp_line;                   // the current parallel poll line.
+    bool pp_sense, individual_status;  // the sense value for the parallel poll lines and the individual status.
+    bool service_pending;              // true if a service request is pending, false otherwise.
 
-    bool tx_loaded, tx_end;
-    uint8_t tx_byte;
-    uint32_t deadline, state_since;
-    bool last_ifc, last_atn, last_dav;
+    bool tx_loaded;                               // true if a byte is loaded for transmission, false otherwise.
+    bool tx_end;                                  // true if the loaded byte is the last byte of the message, false otherwise.
+    uint8_t tx_byte;                              // the byte loaded for transmission.
+    uint32_t deadline;                            // the time by which the current operation must complete, in microseconds.
+    uint32_t state_since;                         // the time since the last state change, in microseconds.
+    bool last_ifc, last_atn, last_dav, last_eoi;  // the last states of the interface signals.
 } ieee488_device_t;
 
+/** @brief Initialize an IEEE 488.1-1987 device.
+ * @param d The device to initialize.
+ * @param hal The hardware abstraction layer.
+ * @param cfg The device configuration.
+ * @param cb The device callbacks.
+ */
 void ieee488_init(ieee488_device_t* d, const ieee488_hal_t* hal,
                   const ieee488_config_t* cfg, const ieee488_callbacks_t* cb);
-void ieee488_reset(ieee488_device_t* d); /* local power-on message (pon) */
-void ieee488_poll(ieee488_device_t* d);  /* call frequently */
+
+/** @brief Reset an IEEE 488.1-1987 device.
+ * 
+ * local power-on message (pon)
+ * @param d The device to reset.
+ */
+void ieee488_reset(ieee488_device_t* d);
+
+/** @brief Poll an IEEE 488.1-1987 device for any activity.
+ * 
+ * Call this frequently to allow the device to process bus events and perform any necessary actions.
+ * @param d The device to poll.
+ */
+void ieee488_poll(ieee488_device_t* d);
 
 /* Local messages defined by Annex D. */
-void ieee488_request_service(ieee488_device_t* d, bool request); /* rsv */
-void ieee488_return_to_local(ieee488_device_t* d);               /* rtl */
-void ieee488_set_individual_status(ieee488_device_t* d, bool ist);
-void ieee488_set_parallel_poll_local(ieee488_device_t* d, bool enabled,
-                                     uint8_t line_1_to_8, bool sense); /* PP2-style local config */
 
+/** @brief Request service from an IEEE 488.1-1987 device. (rsv)
+ * @param d The device to request service from.
+ * @param request true to request service, false to clear the request.
+ */
+void ieee488_request_service(ieee488_device_t* d, bool request);
+
+/** @brief Return an IEEE 488.1-1987 device to local control. (rtl)
+ * @param d The device to return to local control.
+ */
+void ieee488_return_to_local(ieee488_device_t* d);
+
+/** @brief Set the individual status of an IEEE 488.1-1987 device.
+ * @param d The device to set the individual status for.
+ * @param ist The individual status value.
+ */
+void ieee488_set_individual_status(ieee488_device_t* d, bool ist);
+
+/** @brief Set the parallel poll local configuration of an IEEE 488.1-1987 device.
+ * 
+ * PP2-style local config
+ * @param d The device to configure.
+ * @param enabled true to enable parallel poll local configuration, false to disable.
+ * @param line_1_to_8 The parallel poll lines to configure (1 to 8).
+ * @param sense The sense value for the parallel poll lines.
+ */
+void ieee488_set_parallel_poll_local(ieee488_device_t* d, bool enabled,
+                                     uint8_t line_1_to_8, bool sense);
+
+/** @brief Check if an IEEE 488.1-1987 device is a talker.
+ * @param d The device to check.
+ * @return true if the device is a talker, false otherwise.
+ */
 bool ieee488_is_talker(const ieee488_device_t* d);
+
+/** @brief Check if an IEEE 488.1-1987 device is a listener.
+ * @param d The device to check.
+ * @return true if the device is a listener, false otherwise.
+ */
 bool ieee488_is_listener(const ieee488_device_t* d);
+
+/** @brief Check if an IEEE 488.1-1987 device is in remote mode.
+ * @param d The device to check.
+ * @return true if the device is in remote mode, false otherwise.
+ */
 bool ieee488_is_remote(const ieee488_device_t* d);
 
 #ifdef __cplusplus
