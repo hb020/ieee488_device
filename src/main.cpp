@@ -1,38 +1,14 @@
 #include <Arduino.h>
 
 #include "ieee488.h"
+#include "ieee488_hal.h"
 
 ieee488_device_t d;
 
-/* TODO Replace with GPIO/transceiver access. */
-static bool rd(void* c, ieee488_line_t l) {
-    (void)c;
-    (void)l;
-    return false;
-}
-static void wr(void* c, ieee488_line_t l, bool a) {
-    (void)c;
-    (void)l;
-    (void)a;
-}
-static uint8_t rdio(void* c) {
-    (void)c;
-    return 0;
-}
-static void wdio(void* c, uint8_t b, bool e) {
-    (void)c;
-    (void)b;
-    (void)e;
-}
-
-/** @brief  Time in microseconds since startup.
- * @param c Context pointer (unused).
- * @return Time in microseconds since startup.
- */
-static uint32_t tus(void* c) {
-    (void)c;
-    return micros();
-}
+/********************************************************************
+ * Callbacks. They must be non-blocking; any blocking operations should 
+ * be handled in a separate thread or interrupt context.
+ ********************************************************************/
 
 static bool tx(void* c, uint8_t* b, bool* end) {
     (void)c;
@@ -46,45 +22,27 @@ static bool tx(void* c, uint8_t* b, bool* end) {
 
 static void rx(void* c, uint8_t b, bool end) {
     (void)c;
-    printf("RX %02x%s\n", b, end ? " END" : "");
+    Serial.print("RX ");
+    Serial.print(b, HEX);
+    if (end) Serial.print(" END");
+    Serial.println();
 }
 
 static void clear(void* c, bool selected) {
     (void)c;
-    printf("%s clear\n", selected ? "selected" : "universal");
+    Serial.print(selected ? "selected" : "universal");
+    Serial.println(" clear");
 }
 
 static void trigger(void* c) {
     (void)c;
-    puts("trigger");
+    Serial.println("trigger");
 }
 
 static uint8_t stb(void* c) {
     (void)c;
     return 0x10;
 }
-
-ieee488_hal_t h = {
-    0,     // ctx
-    rd,    // read line
-    wr,    // drive line
-    rdio,  // read dio
-    wdio,  // drive dio
-    tus    // time us
-};
-
-ieee488_config_t cfg = {
-    5,                    // primary address
-    0,                    // secondary address
-    IEEE488_ADDR_NORMAL,  // address mode
-    false,                // talk only
-    false,                // listen only
-    true,                 // use EOI
-    '\n',                 // EOS byte
-    false,                // EOS enabled
-    0,                    // handshake timeout us, 0 is indefinite
-    1                     // t1 delay us
-};
 
 ieee488_callbacks_t cb = {
     tx,       // tx_next
@@ -97,8 +55,30 @@ ieee488_callbacks_t cb = {
     0         // ctx
 };
 
+/********************************************************************
+ * The main program
+ ********************************************************************/
+
+ieee488_config_t cfg = {
+    5,                    // primary address
+    0,                    // secondary address
+    IEEE488_ADDR_NORMAL,  // address mode
+    false,                // talk only
+    false,                // listen only
+    true,                 // use EOI
+    '\n',                 // EOS byte
+    false,                // EOS enabled
+    0,                    // T3 handshake timeout us, 0 is indefinite
+    10                    // T1 delay us
+};
+
+
 void setup() {
-    ieee488_init(&d, &h, &cfg, &cb);
+    Serial.begin(115200);
+    Serial.println("Starting IEEE 488.1 device...");
+    ieee488_init(&d, &cfg, &cb);
+    Serial.print("The device is present on address ");
+    Serial.println(cfg.primary_address);
 }
 
 void loop() {

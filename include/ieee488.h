@@ -9,69 +9,39 @@
 extern "C" {
 #endif
 
+// Determine if the ATN line is being handled in an interrupt context.
+// This can be used to achieve the timing constraints around ATN changes if the entire loop takes too much time.
+// #define ATN_IN_INTR_HANDLER
+
 /* IEEE 488.1-1987, 1.4.3: sixteen signal lines. Logical true means asserted.
  * The HAL must implement wired-OR/open-collector semantics where required.
  */
 typedef enum {
-    IEEE488_DIO1 = 0,
-    IEEE488_DIO2,
-    IEEE488_DIO3,
-    IEEE488_DIO4,
-    IEEE488_DIO5,
-    IEEE488_DIO6,
-    IEEE488_DIO7,
-    IEEE488_DIO8,
-    IEEE488_DAV,
-    IEEE488_NRFD,
-    IEEE488_NDAC,
-    IEEE488_ATN,
-    IEEE488_IFC,
-    IEEE488_SRQ,
-    IEEE488_REN,
-    IEEE488_EOI,
-    IEEE488_LINE_COUNT
+    IEEE488_DIO1 = 0,  // R W
+    IEEE488_DIO2,      // R W
+    IEEE488_DIO3,      // R W
+    IEEE488_DIO4,      // R W
+    IEEE488_DIO5,      // R W
+    IEEE488_DIO6,      // R W
+    IEEE488_DIO7,      // R W
+    IEEE488_DIO8,      // R W
+    IEEE488_DAV,       // R W
+    IEEE488_NRFD,      // R W
+    IEEE488_NDAC,      // R W
+    IEEE488_ATN,       // R
+    IEEE488_IFC,       // R
+    IEEE488_SRQ,       //   W
+    IEEE488_REN,       // R
+    IEEE488_EOI        // R W
 } ieee488_line_t;
 
 /** @brief Hardware Abstraction Layer (HAL) for IEEE 488.1-1987.
  * The HAL provides the interface between the IEEE 488.1-1987 protocol implementation and the underlying hardware.
  */
-typedef struct {
-    /** @brief Context pointer for the HAL implementation. */
-    void* ctx;
 
-    /** @brief Read the state of a command line (bit).
-     * @param ctx The context pointer provided to ieee488_init().
-     * @param line The line (bit) to read.
-     * @return true if the line is asserted, false otherwise.
-     */
-    bool (*read_line)(void* ctx, ieee488_line_t line);
-
-    /** @brief Drive a command line (bit) to asserted or released.
-     * @param ctx The context pointer provided to ieee488_init().
-     * @param line The line (bit) to drive.
-     * @param asserted true to assert the line, false to release it.
-     */
-    void (*drive_line)(void* ctx, ieee488_line_t line, bool asserted);
-
-    /** @brief Read the state of the digital I/O lines (DIO1-DIO8).
-     * @param ctx The context pointer provided to ieee488_init().
-     * @return The logical state of the DIO lines, bit 0 = DIO1.
-     */
-    uint8_t (*read_dio)(void* ctx); /* logical byte: bit 0 = DIO1 */
-
-    /** @brief Drive the digital I/O lines (DIO1-DIO8).
-     * @param ctx The context pointer provided to ieee488_init().
-     * @param value The logical state to drive onto the DIO lines, bit 0 = DIO1.
-     * @param enable true to drive the lines, false to release them.
-     */
-    void (*drive_dio)(void* ctx, uint8_t value, bool enable);
-
-    /** @brief Get the time in microseconds since startup.
-     * @param ctx The context pointer provided to ieee488_init().
-     * @return Time in microseconds since startup.
-     */
-    uint32_t (*time_us)(void* ctx);
-} ieee488_hal_t;
+ // See "ieee488_hal.h" for the HAL interface definition. 
+ // The HAL must implement wired-OR/open-collector semantics where required.
+ // It does not go through ctx for speed reasons, but the HAL can use its own context if needed.
 
 /* IEEE 488.1 multiline command codes, 2.13 and Annex E. */
 enum {
@@ -88,9 +58,15 @@ enum {
     IEEE488_CMD_UNL = 0x3F,
     IEEE488_CMD_UNT = 0x5F
 };
+
+// Convert primary address to LAD command byte
 #define IEEE488_LAD(a) ((uint8_t)(0x20u | ((a) & 0x1Fu)))
+// Convert primary address to TAD command byte
 #define IEEE488_TAD(a) ((uint8_t)(0x40u | ((a) & 0x1Fu)))
+// Convert primary address to SAD command byte
 #define IEEE488_SAD(a) ((uint8_t)(0x60u | ((a) & 0x1Fu)))
+
+// Parallel poll sense and enable command bytes
 #define IEEE488_PPE(line_1_to_8, sense) ((uint8_t)(0x60u | (((sense) ? 1u : 0u) << 3) | (((line_1_to_8) - 1u) & 7u)))
 #define IEEE488_PPD 0x70u
 
@@ -105,19 +81,22 @@ typedef enum { IEEE488_ADDR_NORMAL,
 
 /** @brief Configuration for an IEEE 488.1-1987 device. */
 typedef struct {
-    uint8_t primary_address;              // 0..30; 31 is UNL/UNT 
-    uint8_t secondary_address;            // 0..31, used in extended mode 
+    uint8_t primary_address;              // 0..30; 31 is UNL/UNT
+    uint8_t secondary_address;            // 0..31, used in extended mode
     ieee488_address_mode_t address_mode;  // IEEE 488.1 address mode (normal or extended)
     bool talk_only;                       // local ton message, 2.5.5
     bool listen_only;                     // local lon message, 2.6.5
     bool use_eoi;                         // EOI line is used to indicate the end of a message (true) or not (false)
     uint8_t eos_byte;                     // The byte value that indicates the end of a message when EOI is NOT used.
     bool eos_enabled;                     // True if EOS byte is enabled, false otherwise.
-    uint32_t handshake_timeout_us;        // 0 = no software timeout
-    uint32_t t1_delay_us;                 // source settling delay; see 2.3 and 3.8
+    uint32_t handshake_timeout_us;        // T3 handshake timeout us, 0 = no software timeout
+    uint32_t t1_delay_us;                 // T1 source settling delay; see 2.3 and 3.8
 } ieee488_config_t;
 
-/** @brief Callbacks for an IEEE 488.1-1987 device. */
+/** @brief Callbacks for an IEEE 488.1-1987 device.
+ *
+ * The callback functions must be non-blocking; any blocking operations should be handled in a separate thread or interrupt context.
+ */
 typedef struct {
     /* Device-dependent data path, outside the standard (1.4.1, 2.1.1). */
 
@@ -143,7 +122,7 @@ typedef struct {
     uint8_t (*status_byte)(void* ctx);
 
     /* Interface function actions. */
-    
+
     /** @brief Handle a device clear (DC1, 2.10) command.
      * @param ctx The context pointer provided to ieee488_init().
      * @param selected True if the device is addressed, false if it is a universal clear.
@@ -160,12 +139,12 @@ typedef struct {
      * @param remote True if the device is now in remote mode, false if in local mode.
      * @param lockout True if the device is now in lockout state, false otherwise.
      */
-    void (*remote_changed)(void* ctx, bool remote, bool lockout); 
+    void (*remote_changed)(void* ctx, bool remote, bool lockout);
 
     /** @brief Handle a command seen on the bus.
-     * 
+     *
      * Is called before the command is processed.
-     * 
+     *
      * @param ctx The context pointer provided to ieee488_init().
      * @param command The command byte that was seen.
      */
@@ -211,7 +190,6 @@ typedef enum { IEEE488_PP_PPIS,
 
 /** @brief Internal state of an IEEE 488.1-1987 device. */
 typedef struct ieee488_device {
-    ieee488_hal_t hal;       // Hardware Abstraction Layer (HAL) for the device.
     ieee488_config_t cfg;    // Configuration for the device.
     ieee488_callbacks_t cb;  // Callbacks for the device.
 
@@ -246,18 +224,18 @@ typedef struct ieee488_device {
  * @param cfg The device configuration.
  * @param cb The device callbacks.
  */
-void ieee488_init(ieee488_device_t* d, const ieee488_hal_t* hal,
+void ieee488_init(ieee488_device_t* d,
                   const ieee488_config_t* cfg, const ieee488_callbacks_t* cb);
 
 /** @brief Reset an IEEE 488.1-1987 device.
- * 
+ *
  * local power-on message (pon)
  * @param d The device to reset.
  */
 void ieee488_reset(ieee488_device_t* d);
 
 /** @brief Poll an IEEE 488.1-1987 device for any activity.
- * 
+ *
  * Call this frequently to allow the device to process bus events and perform any necessary actions.
  * @param d The device to poll.
  */
@@ -283,7 +261,7 @@ void ieee488_return_to_local(ieee488_device_t* d);
 void ieee488_set_individual_status(ieee488_device_t* d, bool ist);
 
 /** @brief Set the parallel poll local configuration of an IEEE 488.1-1987 device.
- * 
+ *
  * PP2-style local config
  * @param d The device to configure.
  * @param enabled true to enable parallel poll local configuration, false to disable.
