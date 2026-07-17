@@ -9,23 +9,11 @@
 extern "C" {
 #endif
 
-// Determine if the ATN line is being handled in an interrupt context.
-// This can be used to achieve the timing constraints around ATN changes if the entire loop takes too much time.
-// #define ATN_IN_INTR_HANDLER
-
 /* IEEE 488.1-1987, 1.4.3: sixteen signal lines. Logical true means asserted.
  * The HAL must implement wired-OR/open-collector semantics where required.
  */
 typedef enum {
-    IEEE488_DIO1 = 0,  // R W
-    IEEE488_DIO2,      // R W
-    IEEE488_DIO3,      // R W
-    IEEE488_DIO4,      // R W
-    IEEE488_DIO5,      // R W
-    IEEE488_DIO6,      // R W
-    IEEE488_DIO7,      // R W
-    IEEE488_DIO8,      // R W
-    IEEE488_DAV,       // R W
+    IEEE488_DAV = 0,   // R W
     IEEE488_NRFD,      // R W
     IEEE488_NDAC,      // R W
     IEEE488_ATN,       // R
@@ -33,7 +21,7 @@ typedef enum {
     IEEE488_SRQ,       //   W
     IEEE488_REN,       // R
     IEEE488_EOI        // R W
-} ieee488_line_t;
+} ieee488_ctrl_line_t;
 
 /** @brief Hardware Abstraction Layer (HAL) for IEEE 488.1-1987.
  * The HAL provides the interface between the IEEE 488.1-1987 protocol implementation and the underlying hardware.

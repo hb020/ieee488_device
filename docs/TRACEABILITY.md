@@ -2,7 +2,7 @@
 
 | Standard item | Implementation |
 | --- | --- |
-| §1.4.3, sixteen signal lines | `ieee488_line_t`, HAL logical-line API |
+| §1.4.3, sixteen signal lines | data + `ieee488_ctrl_line_t`, HAL logical-line API |
 | §2.1 functional partition | callbacks separate device functions from interface functions |
 | §2.3 SH | `source()`, states `SIDS/SDYS/STRS/SWNS`; DAV/DIO/EOI generation |
 | §2.4 AH | `acceptor()`, states `AIDS/ACRS/ACDS`; NRFD/NDAC interlock |

@@ -17,15 +17,26 @@
 
   Control pin map
   ---------------
-  IFC_PIN   18 : GPIB  9 : PC4 : ieee488_line_t 12
-  NDAC_PIN  17 : GPIB  8 : PC3 : ieee488_line_t 10
-  NRFD_PIN  16 : GPIB  7 : PC2 : ieee488_line_t  9
-  DAV_PIN   15 : GPIB  6 : PC1 : ieee488_line_t  8
-  EOI_PIN   14 : GPIB  5 : PC0 : ieee488_line_t 15
-  REN_PIN   21 : GPIB 17 : PC7 : ieee488_line_t 14
-  SRQ_PIN   19 : GPIB 10 : PC5 : ieee488_line_t 13
-  ATN_PIN   20 : GPIB 11 : PC6 : ieee488_line_t 11
+  IFC_PIN   18 : GPIB  9 : PC4 : ieee488_ctrl_line_t 4
+  NDAC_PIN  17 : GPIB  8 : PC3 : ieee488_ctrl_line_t 2 
+  NRFD_PIN  16 : GPIB  7 : PC2 : ieee488_ctrl_line_t 1
+  DAV_PIN   15 : GPIB  6 : PC1 : ieee488_ctrl_line_t 0
+  EOI_PIN   14 : GPIB  5 : PC0 : ieee488_ctrl_line_t 7
+  REN_PIN   21 : GPIB 17 : PC7 : ieee488_ctrl_line_t 6
+  SRQ_PIN   19 : GPIB 10 : PC5 : ieee488_ctrl_line_t 5
+  ATN_PIN   20 : GPIB 11 : PC6 : ieee488_ctrl_line_t 3
 */
+
+// TODO in order to meet timing constraints:
+// * Enable interrupts for ATN and EOI lines to meet timing requirements.
+// * this means that I MIGHT need to set Global Interrupt Enable (bit 7) in the SREG register (SEI/CLI), but I need to check if Arduino does this automatically. If not, I will need to set it in hal_init().
+// * The problem is that the AT4809 (and others) has problem handling interrupts that originate from the same port. Interrupts might get lost.
+// * Only bits 6 and 2 have fully async interrupt
+// * I might need to go through CCL for ATN ^ EOI
+// * Create dedicated functions for each pin for `hal_drive_line` and `hal_read_line`
+// * Move those functions and `hal_drive_dio` and `hal_read_dio` to inline functions in ieee488_hal.h
+
+// This is not a controller, so I can use all open collector lines
 
 /** Set the state of the pull-up resistors for a port */
 void set_port_pullup_bits(PORT_t& port, uint8_t reg){
@@ -37,14 +48,13 @@ void set_port_pullup_bits(PORT_t& port, uint8_t reg){
   port.PIN5CTRL |= ((reg>>2) & PORT_PULLUPEN_bm);
   port.PIN6CTRL |= ((reg>>3) & PORT_PULLUPEN_bm);
   port.PIN7CTRL |= ((reg>>4) & PORT_PULLUPEN_bm);
-  
 }
 
 /** @brief Convert an IEEE488 line to the corresponding port bit.
  * @param line The IEEE488 line to convert.
  * @return The corresponding port mask for the line.
  */
-inline uint8_t line_to_mask(ieee488_line_t line) {
+inline uint8_t line_to_mask(ieee488_ctrl_line_t line) {
   switch (line)
   {
     case IEEE488_DAV:
@@ -69,20 +79,20 @@ inline uint8_t line_to_mask(ieee488_line_t line) {
 }
 
 /** @brief Read the state of a command line (bit).
- * @param line The line (bit) to read. See ieee488_line_t, 8..15.
+ * @param line The line (bit) to read. See ieee488_ctrl_line_t, 8..15.
  * @return true if the line is asserted, false otherwise.
  */
-bool hal_read_line(ieee488_line_t line) {
+bool hal_read_line(ieee488_ctrl_line_t line) {
   uint8_t mask = line_to_mask(line);
   // do not change the PORTC.DIRCLR = mask as the pin may have been set as output
   return (PORTC.IN & mask) == 0; // Asserted if the pin is LOW
 }
 
 /** @brief Drive a command line (bit) to asserted or released.
- * @param line The line (bit) to drive. See ieee488_line_t, 8..15.
+ * @param line The line (bit) to drive. See ieee488_ctrl_line_t, 8..15.
  * @param asserted true to assert the line, false to release it.
  */
-void hal_drive_line(ieee488_line_t line, bool asserted) {
+void hal_drive_line(ieee488_ctrl_line_t line, bool asserted) {
   uint8_t mask = line_to_mask(line);
   if (asserted) {
     PORTC.DIRSET = mask; // Drive LOW (asserted) via open-collector behavior.
