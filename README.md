@@ -1,8 +1,14 @@
-# IEEE-488.1 non-controller device library
+# IEEE-488.1 (GPIB) device library
 
 > This is a very early version, and is untested.
 
-Portable C99 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function. The CPU is assumed to have direct access to IEEE-488 signal-line transceivers through a small HAL.
+Portable C99 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
+
+This can be used to create:
+
+- a GPIB interface to any device
+- a standalone test device for GPIB controllers
+- a GPIB-to-LAN gateway (like ICS's 4865)
 
 Implemented functions/capabilities:
 
