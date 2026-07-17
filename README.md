@@ -58,7 +58,7 @@ IEEE-488 uses negative-true signalling and wired-OR behavior. The HAL uses **log
 2. Set primary/secondary addresses and timing in `ieee488_config_t`.
 3. Implement callbacks for device-dependent data and actions.
 
-The polling implementation is non-blocking. For high transfer rates, threading and/or GPIO edge interrupts, or translate the same FSM into an FPGA/peripheral implementation.
+The polling implementation is non-blocking. For high transfer rates, use threading and/or GPIO edge interrupts, or translate the same FSM into an FPGA/peripheral implementation.
 
 ## Important conformance notes
 
