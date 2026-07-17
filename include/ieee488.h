@@ -143,12 +143,13 @@ typedef struct {
 
     /** @brief Handle a command seen on the bus.
      *
-     * Is called before the command is processed.
+     * Is called before and after the command processing.
      *
      * @param ctx The context pointer provided to ieee488_init().
      * @param command The command byte that was seen.
+     * @param before True if called before processing the command, false if called after.
      */
-    void (*command_seen)(void* ctx, uint8_t command);
+    void (*command_seen)(void* ctx, uint8_t command, bool before);
 
     void* ctx;
 } ieee488_callbacks_t;

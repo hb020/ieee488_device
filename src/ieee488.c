@@ -63,8 +63,8 @@ static void set_rl(ieee488_device_t* d, ieee488_rl_state_t s) {
  * @param b The command byte to decode.
  */
 static void decode_command(ieee488_device_t* d, uint8_t b) {
+    if (d->cb.command_seen) d->cb.command_seen(d->cb.ctx, b, true);
     bool addressed = (d->listener == IEEE488_L_LADS);
-    if (d->cb.command_seen) d->cb.command_seen(d->cb.ctx, b);
 
     /* If PPC was seen for this addressed device, next SCG byte is PPE/PPD context,
        not extended secondary addressing. */
@@ -141,6 +141,7 @@ static void decode_command(ieee488_device_t* d, uint8_t b) {
                 d->pp_config_addressed = false;
             break;
     }
+    if (d->cb.command_seen) d->cb.command_seen(d->cb.ctx, b, false);
 }
 
 /** @brief Reset the IEEE 488 device to its initial state.
@@ -241,13 +242,13 @@ bool ieee488_is_listener(const ieee488_device_t* d) { return d->listener == IEEE
  */
 bool ieee488_is_remote(const ieee488_device_t* d) { return d->rl == IEEE488_RL_REMS || d->rl == IEEE488_RL_RWLS; }
 
-/** @brief Force the acceptor to the idle state: NRFD and NDAC unasserted, and acceptor state machine reset.
+/** @brief Force the acceptor to the idle state and release AH lines.
  * @param d The IEEE 488 device.
  */
 static void acceptor_force_idle(ieee488_device_t* d) {
-    /* Deterministic AH idle: not ready to accept, not accepted. */
-    hal_drive_line(IEEE488_NRFD, true);
-    hal_drive_line(IEEE488_NDAC, true);
+    /* Not participating in handshake: do not hold shared listener lines. */
+    hal_drive_line(IEEE488_NRFD, false);
+    hal_drive_line(IEEE488_NDAC, false);
     d->ah = IEEE488_AH_AIDS;
 }
 
@@ -274,6 +275,7 @@ static void acceptor(ieee488_device_t* d, bool atn) {
             break;
 
         case IEEE488_AH_ACRS:
+            /* No timeout here: waiting for DAV start is an idle condition, not an in-progress byte. */
             if (dav) {
                 hal_drive_line(IEEE488_NRFD, true);
                 uint8_t b = hal_read_dio();
@@ -284,8 +286,6 @@ static void acceptor(ieee488_device_t* d, bool atn) {
                 hal_drive_line(IEEE488_NDAC, false);
                 d->ah = IEEE488_AH_ACDS;
                 arm(d);
-            } else if (expired(d)) {
-                acceptor_force_idle(d);
             }
             break;
 
@@ -418,19 +418,18 @@ static void atn_handler(ieee488_device_t* d, bool atn, bool eoi) {
     }
 
     /* t5: PP state transition on ATN ^ EOI */
-
-    bool idy = atn && eoi;
-    if (idy && d->pp_configured) {
-        d->pp = IEEE488_PP_PPAS;
-        uint8_t v = (d->individual_status == d->pp_sense) ? (uint8_t)(1u << (d->pp_line - 1u)) : 0;
-        hal_drive_dio(v, v != 0);
-    } else if (d->pp == IEEE488_PP_PPAS && !idy) {
-        d->pp = IEEE488_PP_PPSS;
-        hal_drive_dio(0, false);
-    }
-    if (idy) {
-        hal_drive_line(IEEE488_NRFD, true);
-        hal_drive_line(IEEE488_NDAC, true);
+     bool idy = atn && eoi;
+    if (d->pp_configured) {
+        if (idy) {
+            d->pp = IEEE488_PP_PPAS;
+            uint8_t v = (d->individual_status == d->pp_sense) ? (uint8_t)(1u << (d->pp_line - 1u)) : 0;
+            hal_drive_dio(v, v != 0);
+            hal_drive_line(IEEE488_NRFD, true);
+            hal_drive_line(IEEE488_NDAC, true);            
+        } else if (d->pp == IEEE488_PP_PPAS && !idy) {
+            d->pp = IEEE488_PP_PPSS;
+            hal_drive_dio(0, false);
+        }
     }
 }
 

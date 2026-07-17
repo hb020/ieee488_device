@@ -74,7 +74,7 @@ inline uint8_t line_to_mask(ieee488_line_t line) {
  */
 bool hal_read_line(ieee488_line_t line) {
   uint8_t mask = line_to_mask(line);
-  PORTC.DIRCLR = mask; // Set the pin as input
+  // do not change the PORTC.DIRCLR = mask as the pin may have been set as output
   return (PORTC.IN & mask) == 0; // Asserted if the pin is LOW
 }
 
@@ -84,11 +84,11 @@ bool hal_read_line(ieee488_line_t line) {
  */
 void hal_drive_line(ieee488_line_t line, bool asserted) {
   uint8_t mask = line_to_mask(line);
-  PORTC.DIRSET = mask; // Set the pin as output
   if (asserted) {
-    PORTC.OUTSET = mask;
-  } else {
+    PORTC.DIRSET = mask; // Drive LOW (asserted) via open-collector behavior.
     PORTC.OUTCLR = mask;
+  } else {
+    PORTC.DIRCLR = mask; // Release line (Hi-Z), external/pull-up drives HIGH.
   }
 }
 
