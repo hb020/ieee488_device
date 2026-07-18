@@ -10,7 +10,9 @@ extern "C" {
 
 // Determine if the ATN line is being handled in an interrupt context.
 // This can be used to achieve the timing constraints around ATN changes if the entire loop takes too much time.
-#define ATN_IN_INTR_HANDLER
+// #define ATN_IN_INTR_HANDLER
+
+// TODO: when I move to INTR handler, SPOLL works, but I can no longer interact with the bus.
 
 // When the pins are physically LOW, they are true (asserted) in the IEEE 488.1-1987 standard. 
 // When the pins are physically HIGH, they are false (released) in the standard. 
@@ -127,5 +129,11 @@ bool hal_init(void);
 #ifdef __cplusplus
 }
 #endif
+
+#ifdef ATmega4809
+
+#include "ieee488_hal_ATmega4809.h"
+
+#endif // ATmega4809
 
 #endif // IEEE488_HAL_H

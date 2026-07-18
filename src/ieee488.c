@@ -245,7 +245,7 @@ bool ieee488_is_remote(void) { return ieee488_device.rl == IEEE488_RL_REMS || ie
 /** @brief Force the acceptor to the idle state and release AH lines.
  *
  */
-static void acceptor_force_idle(void) {
+static inline void acceptor_force_idle(void) {
     /* Not participating in handshake: do not hold shared listener lines. */
     hal_drive_line(IEEE488_NRFD, false);
     hal_drive_line(IEEE488_NDAC, false);
@@ -310,7 +310,7 @@ static void acceptor(bool atn) {
  *
  * @param drop_tx true to drop the current transmit byte, false to keep it.
  */
-static void source_force_idle(bool drop_tx) {
+static inline void source_force_idle(bool drop_tx) {
     hal_drive_line(IEEE488_DAV, false);
     hal_drive_line(IEEE488_EOI, false);
     hal_drive_dio(0, false);
@@ -399,22 +399,20 @@ static void source(bool atn) {
 //
 // ATN and EOI reactions are handled in an interrupt handler for t2/t5 compliance.
 
-static void atn_handler(bool atn, bool eoi) {
+static inline void atn_handler(bool atn, bool eoi) {
     /* t2, t5: immediate state changes on ATN + EOI transition (must be called from ISR) */
     // t2: SH, AH, T, L, LE, TE state transition on ATN
-    if (!atn) {
-        /* ATN released: transition addressed talker/listener to active */
-        if (ieee488_device.talker == IEEE488_T_TADS) ieee488_device.talker = ieee488_device.serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
-        if (ieee488_device.listener == IEEE488_L_LADS) ieee488_device.listener = IEEE488_L_LACS;
-    } else {
+    if (atn) {
+        // ATN asserted: transition active talker/listener to addressed, and force source/acceptor to idle
+        source_force_idle(true);
+        acceptor_force_idle();        
         /* ATN asserted: transition active talker/listener to addressed */
         if (ieee488_device.talker == IEEE488_T_TACS || ieee488_device.talker == IEEE488_T_SPAS) ieee488_device.talker = IEEE488_T_TADS;
         if (ieee488_device.listener == IEEE488_L_LACS) ieee488_device.listener = IEEE488_L_LADS;
-    }
-    /* Force source and acceptor to idle on ATN assertion */
-    if (atn) {
-        source_force_idle(true);
-        acceptor_force_idle();
+    } else {
+        /* ATN released: transition addressed talker/listener to active */
+        if (ieee488_device.talker == IEEE488_T_TADS) ieee488_device.talker = ieee488_device.serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
+        if (ieee488_device.listener == IEEE488_L_LADS) ieee488_device.listener = IEEE488_L_LACS;
     }
 
     /* t5: PP state transition on ATN ^ EOI */
@@ -440,9 +438,9 @@ void ieee488_handle_atn_interrupt(void) {
     bool atn = hal_read_line(IEEE488_ATN);
     bool eoi = hal_read_line(IEEE488_EOI);
     if ((atn != ieee488_device.last_atn) || (eoi != ieee488_device.last_eoi)) {
+        atn_handler(atn, eoi);
         ieee488_device.last_atn = atn;
         ieee488_device.last_eoi = eoi;
-        atn_handler(atn, eoi);
     }
 }
 #endif
