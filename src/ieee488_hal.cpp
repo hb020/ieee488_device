@@ -32,9 +32,10 @@
 // * this means that I MIGHT need to set Global Interrupt Enable (bit 7) in the SREG register (SEI/CLI), but I need to check if Arduino does this automatically. If not, I will need to set it in hal_init().
 // * The problem is that the AT4809 (and others) has problem handling interrupts that originate from the same port. Interrupts might get lost.
 // * Only bits 6 and 2 have fully async interrupt
-// * I might need to go through CCL for ATN ^ EOI
 // * Create dedicated functions for each pin for `hal_drive_line` and `hal_read_line`
 // * Move those functions and `hal_drive_dio` and `hal_read_dio` to inline functions in ieee488_hal.h
+// * see https://github.com/microchip-pic-avr-examples/atmega4809-getting-started-with-gpio-mplab/blob/master/Wake_Up_On_Button_Press/Wake_Up_On_Button_Press.X/main.c
+// * I might need to go through CCL for ATN ^ EOI (see https://github.com/microchip-pic-avr-examples/atmega4809-getting-started-with-ccl-studio)
 
 // This is not a controller, so I can use all open collector lines
 

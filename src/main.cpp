@@ -3,8 +3,6 @@
 #include "ieee488.h"
 #include "ieee488_hal.h"
 
-ieee488_device_t d;
-
 /********************************************************************
  * Callbacks. They must be non-blocking; any blocking operations should
  * be handled in a separate thread or interrupt context.
@@ -105,55 +103,55 @@ static void command_seen(void* ctx, uint8_t command, bool before) {
     Serial.print("CMD: ");
     print_command(command);
     // Serial.print(" SH: ");
-    // Serial.print(d.sh, HEX);
+    // Serial.print(ieee488_device.sh, HEX);
     // Serial.print(" AH: ");
-    // Serial.print(d.ah, HEX);
+    // Serial.print(ieee488_device.ah, HEX);
     // Serial.print(" T: ");
-    // Serial.print(d.talker, HEX);
+    // Serial.print(ieee488_device.talker, HEX);
     // Serial.print(" L: ");
-    // Serial.print(d.listener, HEX);
+    // Serial.print(ieee488_device.listener, HEX);
     // Serial.print(" SR: ");
-    // Serial.print(d.sr, HEX);
+    // Serial.print(ieee488_device.sr, HEX);
     // Serial.print(" RL: ");
-    // Serial.print(d.rl, HEX);
+    // Serial.print(ieee488_device.rl, HEX);
     // Serial.print(" PP: ");
-    // Serial.print(d.pp, HEX);
+    // Serial.print(ieee488_device.pp, HEX);
     // Serial.print(" SP: ");
-    // Serial.print(d.serial_poll_mode ? "true" : "false");
+    // Serial.print(ieee488_device.serial_poll_mode ? "true" : "false");
     // Serial.print(" TPA: ");
-    // Serial.print(d.talk_primary_addressed ? "true" : "false");
+    // Serial.print(ieee488_device.talk_primary_addressed ? "true" : "false");
     // Serial.print(" LPA: ");
-    // Serial.print(d.listen_primary_addressed ? "true" : "false");
+    // Serial.print(ieee488_device.listen_primary_addressed ? "true" : "false");
     // Serial.print(" PPC: ");
-    // Serial.print(d.pp_config_addressed ? "true" : "false");
+    // Serial.print(ieee488_device.pp_config_addressed ? "true" : "false");
     // Serial.print(" PPCfg: ");
-    // Serial.print(d.pp_configured ? "true" : "false");
+    // Serial.print(ieee488_device.pp_configured ? "true" : "false");
     // Serial.print(" PPLine: ");
-    // Serial.print(d.pp_line, HEX);
+    // Serial.print(ieee488_device.pp_line, HEX);
     // Serial.print(" PPSense: ");
-    // Serial.print(d.pp_sense ? "true" : "false");
+    // Serial.print(ieee488_device.pp_sense ? "true" : "false");
     // Serial.print(" IndStat: ");
-    // Serial.print(d.individual_status ? "true" : "false");
+    // Serial.print(ieee488_device.individual_status ? "true" : "false");
     // Serial.print(" ServPend: ");
-    // Serial.print(d.service_pending ? "true" : "false");
+    // Serial.print(ieee488_device.service_pending ? "true" : "false");
     // Serial.print(" TXLoaded: ");
-    // Serial.print(d.tx_loaded ? "true" : "false");
+    // Serial.print(ieee488_device.tx_loaded ? "true" : "false");
     // Serial.print(" TXEnd: ");
-    // Serial.print(d.tx_end ? "true" : "false");
+    // Serial.print(ieee488_device.tx_end ? "true" : "false");
     // Serial.print(" TXByte: ");
-    // Serial.print(d.tx_byte, HEX);
+    // Serial.print(ieee488_device.tx_byte, HEX);
     // Serial.print(" Deadline: ");
-    // Serial.print(d.deadline);
+    // Serial.print(ieee488_device.deadline);
     // Serial.print(" StateSince: ");
-    // Serial.print(d.state_since);
+    // Serial.print(ieee488_device.state_since);
     // Serial.print(" LastIFC: ");
-    // Serial.print(d.last_ifc ? "true" : "false");
+    // Serial.print(ieee488_device.last_ifc ? "true" : "false");
     // Serial.print(" LastATN: ");
-    // Serial.print(d.last_atn ? "true" : "false");
+    // Serial.print(ieee488_device.last_atn ? "true" : "false");
     // Serial.print(" LastDAV: ");
-    // Serial.print(d.last_dav ? "true" : "false");
+    // Serial.print(ieee488_device.last_dav ? "true" : "false");
     // Serial.print(" LastEOI: ");
-    // Serial.print(d.last_eoi ? "true" : "false");
+    // Serial.print(ieee488_device.last_eoi ? "true" : "false");
     Serial.println();
 }
 
@@ -188,11 +186,11 @@ ieee488_config_t cfg = {
 void setup() {
     Serial.begin(115200);
     Serial.println("Starting IEEE 488.1 device...");
-    ieee488_init(&d, &cfg, &cb);
+    ieee488_init(&cfg, &cb);
     Serial.print("The device is present on address ");
     Serial.println(cfg.primary_address);
 }
 
 void loop() {
-    ieee488_poll(&d);
+    ieee488_poll();
 }

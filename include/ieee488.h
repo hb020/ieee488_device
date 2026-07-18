@@ -9,6 +9,12 @@
 extern "C" {
 #endif
 
+// This implementation knows how to talk to 1 GPIB bus connector.
+// More connectors could in theory be possible by for example 
+// making `struct ieee488_device_t` a parameter to all functions, 
+// but that would make the HAL more complex and slower, and it is 
+// not needed for the current use case.
+
 /* IEEE 488.1-1987, 1.4.3: sixteen signal lines. Logical true means asserted.
  * The HAL must implement wired-OR/open-collector semantics where required.
  */
@@ -207,76 +213,68 @@ typedef struct ieee488_device {
     bool last_ifc, last_atn, last_dav, last_eoi;  // the last states of the interface signals.
 } ieee488_device_t;
 
-/** @brief Initialize an IEEE 488.1-1987 device.
- * @param d The device to initialize.
+extern ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance.
+
+/** @brief Initialize the device.
  * @param hal The hardware abstraction layer.
  * @param cfg The device configuration.
  * @param cb The device callbacks.
  */
-void ieee488_init(ieee488_device_t* d,
-                  const ieee488_config_t* cfg, const ieee488_callbacks_t* cb);
+void ieee488_init(const ieee488_config_t* cfg, const ieee488_callbacks_t* cb);
 
-/** @brief Reset an IEEE 488.1-1987 device.
+/** @brief Reset the device.
  *
- * local power-on message (pon)
- * @param d The device to reset.
+ * Local power-on message (pon).
  */
-void ieee488_reset(ieee488_device_t* d);
+void ieee488_reset(void);
 
 /** @brief Poll an IEEE 488.1-1987 device for any activity.
  *
  * Call this frequently to allow the device to process bus events and perform any necessary actions.
  * @param d The device to poll.
  */
-void ieee488_poll(ieee488_device_t* d);
+void ieee488_poll(void);
 
 /* Local messages defined by Annex D. */
 
-/** @brief Request service from an IEEE 488.1-1987 device. (rsv)
- * @param d The device to request service from.
+/** @brief Request service the device. (rsv)
  * @param request true to request service, false to clear the request.
  */
-void ieee488_request_service(ieee488_device_t* d, bool request);
+void ieee488_request_service(bool request);
 
-/** @brief Return an IEEE 488.1-1987 device to local control. (rtl)
- * @param d The device to return to local control.
+/** @brief Return the device to local control. (rtl)
  */
-void ieee488_return_to_local(ieee488_device_t* d);
+void ieee488_return_to_local(void);
 
-/** @brief Set the individual status of an IEEE 488.1-1987 device.
- * @param d The device to set the individual status for.
+/** @brief Set the individual status of the device.
  * @param ist The individual status value.
  */
-void ieee488_set_individual_status(ieee488_device_t* d, bool ist);
+void ieee488_set_individual_status(bool ist);
 
-/** @brief Set the parallel poll local configuration of an IEEE 488.1-1987 device.
+/** @brief Set the parallel poll local configuration of the device.
  *
  * PP2-style local config
- * @param d The device to configure.
  * @param enabled true to enable parallel poll local configuration, false to disable.
  * @param line_1_to_8 The parallel poll lines to configure (1 to 8).
  * @param sense The sense value for the parallel poll lines.
  */
-void ieee488_set_parallel_poll_local(ieee488_device_t* d, bool enabled,
+void ieee488_set_parallel_poll_local(bool enabled,
                                      uint8_t line_1_to_8, bool sense);
 
-/** @brief Check if an IEEE 488.1-1987 device is a talker.
- * @param d The device to check.
+/** @brief Check if the device is a talker.
  * @return true if the device is a talker, false otherwise.
  */
-bool ieee488_is_talker(const ieee488_device_t* d);
+bool ieee488_is_talker(void);
 
-/** @brief Check if an IEEE 488.1-1987 device is a listener.
- * @param d The device to check.
+/** @brief Check if the device is a listener.
  * @return true if the device is a listener, false otherwise.
  */
-bool ieee488_is_listener(const ieee488_device_t* d);
+bool ieee488_is_listener(void);
 
-/** @brief Check if an IEEE 488.1-1987 device is in remote mode.
- * @param d The device to check.
+/** @brief Check if the device is in remote mode.
  * @return true if the device is in remote mode, false otherwise.
  */
-bool ieee488_is_remote(const ieee488_device_t* d);
+bool ieee488_is_remote(void);
 
 #ifdef __cplusplus
 }

@@ -24,11 +24,84 @@ extern "C" {
  */
 bool hal_read_line(ieee488_ctrl_line_t line);
 
+/** @brief Read the state of the DAV line.
+ * @return true if DAV is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_dav(void);
+
+/** @brief Read the state of the NRFD line.
+ * @return true if NRFD is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_nrfd(void);
+
+/** @brief Read the state of the NDAC line.
+ * @return true if NDAC is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_ndac(void);
+
+/** @brief Read the state of the ATN line.
+ * @return true if ATN is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_atn(void);
+
+/** @brief Read the state of the IFC line.
+ * @return true if IFC is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_ifc(void);
+
+// No need for bool hal_read_srq(void);
+
+/** @brief Read the state of the REN line.
+ * @return true if REN is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_ren(void);
+
+/** @brief Read the state of the EOI line.
+ * @return true if EOI is asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_eoi(void);
+
+/** @brief Read the state of the ATN and EOI lines together.
+ * @return true if both ATN and EOI are asserted (pulled LOW), false otherwise.
+ */
+bool hal_read_atn_and_eoi(void); // for ppol
+
+
 /** @brief Drive a command line (bit) to asserted or released.
  * @param line The line (bit) to drive. See ieee488_ctrl_line_t, 8..15.
  * @param asserted true to assert the line (pull LOW), false to release it.
  */
 void hal_drive_line(ieee488_ctrl_line_t line, bool asserted);
+
+/** @brief Drive the DAV line.
+ * @param asserted true to assert the line (pull LOW), false to release it.
+ */
+void hal_drive_dav(bool asserted);
+
+/** @brief Drive the NRFD line.
+ * @param asserted true to assert the line (pull LOW), false to release it.
+ */
+void hal_drive_nrfd(bool asserted);
+
+/** @brief Drive the NDAC line.
+ * @param asserted true to assert the line (pull LOW), false to release it.
+ */
+void hal_drive_ndac(bool asserted);
+
+// No need for void hal_drive_atn(bool asserted);
+// No need for void hal_drive_ifc(bool asserted);
+
+/** @brief Drive the SRQ line.
+ * @param asserted true to assert the line (pull LOW), false to release it.
+ */
+void hal_drive_srq(bool asserted);
+
+// No need for void hal_drive_ren(bool asserted);
+
+/** @brief Drive the EOI line.
+ * @param asserted true to assert the line (pull LOW), false to release it.
+ */
+void hal_drive_eoi(bool asserted);
 
 /** @brief Read the state of the digital I/O lines (DIO1-DIO8).
  * @return The logical state of the DIO lines, bit 0 = DIO1.
