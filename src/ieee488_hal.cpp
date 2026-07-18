@@ -130,6 +130,20 @@ uint32_t hal_time_us(void) {
     return micros();
 }
 
+#ifdef ATN_IN_INTR_HANDLER  
+// Interrupt handler for ATN line (PC6)
+// EOI line (PC0) could maybe be handled similarly if needed, but for now, we focus on ATN.
+// EOI + ATN could be handled via CCL (Configurable Custom Logic) if needed, but for now, we focus on ATN.
+ISR(PORTC_PORT_vect) {
+  if (PORTC.INTFLAGS & (1 << 6)) { // Check if ATN triggered the interrupt
+    ieee488_handle_atn_interrupt(); // Call the handler for ATN interrupt
+    // Handle ATN interrupt
+    PORTC.INTFLAGS = (1 << 6); // Clear the interrupt flag for ATN
+  }
+}
+#endif  // ATN_IN_INTR_HANDLER
+
+
 /** @brief Initialize the HAL.
  * @return true if initialization was successful, false otherwise.
  */
@@ -141,7 +155,9 @@ bool hal_init(void) {
   // Set control pins to input_pullup, so we don't have to worry about them being driven low by the device when we are not driving them.
   set_port_pullup_bits(PORTC, 0xFF);
   PORTC.DIRCLR = 0b11111111;
-
+#ifdef ATN_IN_INTR_HANDLER  
+  PORTC.PIN6CTRL |= PORT_ISC_BOTHEDGES_gc; // Enable interrupt on both edges for ATN (PC6)
+#endif
   return true;
 
 }

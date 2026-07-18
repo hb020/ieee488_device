@@ -1,7 +1,5 @@
 # IEEE-488.1 (GPIB) device library
 
-> This is a very early version, and is untested.
-
 Portable C99 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
 
 This can be used to create:
@@ -10,7 +8,24 @@ This can be used to create:
 - a standalone test device for GPIB controllers
 - a GPIB-to-LAN gateway (like ICS's 4865)
 
-Implemented functions/capabilities:
+## Status
+
+This is an early version.
+
+Mostly working:
+
+- serial poll
+- read/write
+
+No working:
+
+- timing
+
+To be tested:
+
+- parallel poll
+
+## Supported functions/capabilities
 
 - `SH1` source handshake — IEEE 488.1-1987 §2.3
 - `AH1` acceptor handshake — §2.4
@@ -25,7 +40,7 @@ Implemented functions/capabilities:
 
 The library deliberately does not implement the `C` function (§2.12), does not drive `ATN`, `IFC`, or `REN`, and ignores `TCT` as required for a non-controller device.
 
-## Implemented command set
+## Supported command set
 
 | Message |  Code/range | Implementation                                          |
 | ------- | ----------: | ------------------------------------------------------- |
@@ -45,8 +60,6 @@ The library deliberately does not implement the `C` function (§2.12), does not 
 | UNT     |      `0x5F` | Untalk                                                  |
 | SAD/PPE | `0x60–0x6F` | Secondary addressing or poll enable according to state  |
 | SAD/PPD | `0x70–0x7F` | Secondary addressing or poll disable according to state |
-
-IEEE-488.1 §5.7 requires inappropriate multiline messages to be handshaken but otherwise ignored; the acceptor handshake follows this behavior rather than stalling the bus or reporting a protocol error.
 
 ## Electrical/HAL assumptions
 

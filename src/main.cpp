@@ -3,6 +3,10 @@
 #include "ieee488.h"
 #include "ieee488_hal.h"
 
+#define LED_R 13
+#define LED_G 39
+#define LED_B 38
+
 /********************************************************************
  * Callbacks. They must be non-blocking; any blocking operations should
  * be handled in a separate thread or interrupt context.
@@ -51,9 +55,33 @@ static uint8_t status_byte(void* c) {
  */
 static void remote_changed(void* ctx, bool remote, bool lockout) {
     (void)ctx;
-    Serial.print(remote ? "remote" : "local");
-    Serial.println(lockout ? " lockout" : "");
+    (void)lockout;
+    digitalWrite(LED_R, remote ? LOW : HIGH);
+    // Serial.print(remote ? "remote" : "local");
+    // Serial.println(lockout ? " lockout" : "");
 }
+
+/** @brief Handle a change in the addressed status.
+ * @param ctx The context pointer provided to ieee488_init().
+ * @param primary_address The primary address of the device that was addressed.
+ * @param secondary_address The secondary address of the device that was addressed.
+ * @param addressed True if the device is now addressed, false otherwise.
+ */
+static void addressed_changed(void* ctx, uint8_t primary_address,
+                            uint8_t secondary_address, bool addressed) {
+    (void)ctx;
+    (void)primary_address;
+    (void)secondary_address;
+    digitalWrite(LED_B, addressed ? LOW : HIGH);
+
+    // Serial.print("Addressed: ");
+    // Serial.print(primary_address, DEC);
+    // Serial.print(",");
+    // Serial.print(secondary_address, DEC);
+    // Serial.print(addressed ? " addressed" : " not addressed");
+    // Serial.println();
+}
+
 
 static void print_command(uint8_t b) {
     switch (b) {
@@ -161,7 +189,8 @@ ieee488_callbacks_t cb = {
     status_byte,     // status_byte
     device_clear,    // device_clear
     device_trigger,  // device_trigger
-    0, // remote_changed,  // remote_changed
+    remote_changed,  // remote_changed,
+    addressed_changed, // addressed_changed
     0, // command_seen,    // command_seen
     0                // ctx
 };
@@ -184,6 +213,12 @@ ieee488_config_t cfg = {
 };
 
 void setup() {
+    pinMode(LED_R, OUTPUT);
+    pinMode(LED_G, OUTPUT);
+    pinMode(LED_B, OUTPUT);
+    digitalWrite(LED_R, HIGH);
+    digitalWrite(LED_G, LOW);
+    digitalWrite(LED_B, HIGH);
     Serial.begin(115200);
     Serial.println("Starting IEEE 488.1 device...");
     ieee488_init(&cfg, &cb);

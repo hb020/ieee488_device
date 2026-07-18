@@ -135,6 +135,15 @@ typedef struct {
      */
     void (*remote_changed)(void* ctx, bool remote, bool lockout);
 
+    /** @brief Handle a change in the addressed status.
+     * @param ctx The context pointer provided to ieee488_init().
+     * @param primary_address The primary address of the device that was addressed.
+     * @param secondary_address The secondary address of the device that was addressed.
+     * @param addressed True if the device is now addressed, false otherwise.
+     */
+    void (*addressed_changed)(void* ctx, uint8_t primary_address,
+                              uint8_t secondary_address, bool addressed);
+
     /** @brief Handle a command seen on the bus.
      *
      * Is called before and after the command processing.
@@ -275,6 +284,13 @@ bool ieee488_is_listener(void);
  * @return true if the device is in remote mode, false otherwise.
  */
 bool ieee488_is_remote(void);
+
+/** @brief Handle an ATN interrupt.
+ *
+ * This interrupt handler should be called when either the ATN or EOI lines change state.
+ * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
+ */
+void ieee488_handle_atn_interrupt(void);
 
 #ifdef __cplusplus
 }

@@ -436,7 +436,7 @@ static void atn_handler(bool atn, bool eoi) {
 #ifdef ATN_IN_INTR_HANDLER
 // This interrupt handler is called when either ATN or EOI changes state.
 // It is expected to be called from an interrupt context, and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
-void ieee488_handle_interrupt(void) {
+void ieee488_handle_atn_interrupt(void) {
     bool atn = hal_read_line(IEEE488_ATN);
     bool eoi = hal_read_line(IEEE488_EOI);
     if ((atn != ieee488_device.last_atn) || (eoi != ieee488_device.last_eoi)) {
