@@ -22,11 +22,12 @@ Working:
 
 Not compliant:
 
-- timing on an AT4809. The fastest I can get is 650ns for t2, while it should be 200ns. But all my gateways have no problem with it.
+- timing on an AT4809. The fastest I can get is 650ns for t2, while it should be 200ns. But none of my gateways have problems with it.
 
 TODO:
 
 - collaboration between interrupt handler and the regular poller in the `acceptor()` and `source()` functions.
+- allow more than 1 address to be adressed
 - parallel poll
 
 ## Supported functions/capabilities

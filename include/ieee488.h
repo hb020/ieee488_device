@@ -10,13 +10,13 @@ extern "C" {
 #endif
 
 // This implementation knows how to talk to 1 GPIB bus connector.
-// More connectors could in theory be possible by for example 
-// making `struct ieee488_device_t` a parameter to all functions, 
-// but that would make the HAL more complex and slower, and it is 
+// More connectors could in theory be possible by for example
+// making `struct ieee488_device_t` a parameter to all functions,
+// but that would make the HAL more complex and slower, and it is
 // not needed for the current use case.
 
-// The mechanism needed for syncing between the ISR and the main code is affected 
-// by 8 bit Arduino limitations: `#include <stdatomic.h>` is not supported (yet). 
+// The mechanism needed for syncing between the ISR and the main code is affected
+// by 8 bit Arduino limitations: `#include <stdatomic.h>` is not supported (yet).
 // Therefore, I use `volatile`, `#include <util/atomic.h>` and `ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { .... }`.
 // If you want to move to a better chain, you WILL want to use atomic variables.
 
@@ -24,23 +24,23 @@ extern "C" {
  * The HAL must implement wired-OR/open-collector semantics where required.
  */
 typedef enum {
-    IEEE488_DAV = 0,   // R W
-    IEEE488_NRFD,      // R W
-    IEEE488_NDAC,      // R W
-    IEEE488_ATN,       // R
-    IEEE488_IFC,       // R
-    IEEE488_SRQ,       //   W
-    IEEE488_REN,       // R
-    IEEE488_EOI        // R W
+    IEEE488_DAV = 0,  // R W
+    IEEE488_NRFD,     // R W
+    IEEE488_NDAC,     // R W
+    IEEE488_ATN,      // R
+    IEEE488_IFC,      // R
+    IEEE488_SRQ,      //   W
+    IEEE488_REN,      // R
+    IEEE488_EOI       // R W
 } ieee488_ctrl_line_t;
 
 /** @brief Hardware Abstraction Layer (HAL) for IEEE 488.1-1987.
  * The HAL provides the interface between the IEEE 488.1-1987 protocol implementation and the underlying hardware.
  */
 
- // See "ieee488_hal.h" for the HAL interface definition. 
- // The HAL must implement wired-OR/open-collector semantics where required.
- // It does not go through ctx for speed reasons, but the HAL can use its own context if needed.
+// See "ieee488_hal.h" for the HAL interface definition.
+// The HAL must implement wired-OR/open-collector semantics where required.
+// It does not go through ctx for speed reasons, but the HAL can use its own context if needed.
 
 /* IEEE 488.1 multiline command codes, 2.13 and Annex E. */
 enum {
@@ -162,7 +162,7 @@ typedef struct {
     void* ctx;
 } ieee488_callbacks_t;
 
-// Force the enums in 1 byte each, so that the need for atomic access is reduced. 
+// Force the enums in 1 byte each, so that the need for atomic access is reduced.
 // You may want to change that and use atomic access if you have a different architecture or compiler that does not guarantee atomic access to 1-byte variables.
 
 typedef enum { IEEE488_SH_SIDS,
@@ -222,13 +222,14 @@ typedef struct ieee488_device {
     bool pp_sense, individual_status;  // the sense value for the parallel poll lines and the individual status.
     bool service_pending;              // true if a service request is pending, false otherwise.
 
-    bool tx_loaded;                               // true if a byte is loaded for transmission, false otherwise.
-    bool tx_end;                                  // true if the loaded byte is the last byte of the message, false otherwise.
-    uint8_t tx_byte;                              // the byte loaded for transmission.
-    uint32_t deadline;                            // the time by which the current operation must complete, in microseconds.
-    uint32_t state_since;                         // the time since the last state change, in microseconds.
+    bool tx_loaded;                                           // true if a byte is loaded for transmission, false otherwise.
+    bool tx_end;                                              // true if the loaded byte is the last byte of the message, false otherwise.
+    uint8_t tx_byte;                                          // the byte loaded for transmission.
+    uint32_t deadline;                                        // the time by which the current operation must complete, in microseconds.
+    uint32_t state_since;                                     // the time since the last state change, in microseconds.
     volatile uint8_t last_atn, last_eoi, last_idy, last_ren;  // the last states of the interface signals.
-    volatile uint8_t restart_loop;  // true if the main loop should be restarted, false otherwise.
+    bool last_addressed;                                      // true if the device was last addressed, false otherwise.
+    volatile uint8_t restart_loop;                            // true if the main loop should be restarted, false otherwise.
 } ieee488_device_t;
 
 extern ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance.
@@ -244,7 +245,7 @@ void ieee488_init(const ieee488_config_t* cfg, const ieee488_callbacks_t* cb);
  *
  * Local power-on message (pon).
  */
-void ieee488_reset(void);
+void ieee488_reset(bool from_power_on);
 
 /** @brief Poll an IEEE 488.1-1987 device for any activity.
  *

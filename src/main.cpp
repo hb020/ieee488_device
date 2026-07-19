@@ -77,9 +77,9 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
         digitalWrite(LED_G, LOW);
         digitalWrite(LED_R, HIGH);
     }
-    Serial.print(remote ? "remote" : "local");
-    Serial.print(lockout ? " lockout" : "");
-    Serial.println();
+    // Serial.print(remote ? "remote" : "local");
+    // Serial.print(lockout ? " lockout" : "");
+    // Serial.println();
 }
 
 /** @brief Handle a change in the addressed status.
@@ -211,7 +211,7 @@ ieee488_callbacks_t cb = {
     device_trigger,  // device_trigger
     remote_changed,  // remote_changed,
     addressed_changed, // addressed_changed
-    command_seen,    // command_seen
+    0, // command_seen,    // command_seen
     0                // ctx
 };
 

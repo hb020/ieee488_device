@@ -162,12 +162,14 @@ static void decode_command(uint8_t b) {
 
 /** @brief Reset the IEEE 488 device to its initial state.
  */
-void ieee488_reset(void) {
+void ieee488_reset(bool from_power_on) {
     bool notify_remote_local = false;
+    bool notify_addressed_changed = false;
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
         ieee488_device.sh = IEEE488_SH_SIDS;
         ieee488_device.ah = IEEE488_AH_AIDS;
         ieee488_device.talker = IEEE488_T_TIDS;
+        notify_addressed_changed = (ieee488_device.listener != IEEE488_L_LIDS);
         ieee488_device.listener = IEEE488_L_LIDS;
         ieee488_device.sr = IEEE488_SR_NPRS;
         notify_remote_local = (ieee488_device.rl != IEEE488_RL_LOCS);
@@ -193,8 +195,14 @@ void ieee488_reset(void) {
         ieee488_device.last_ren = REN_IS_ASSERTED();
     }
 
+    if (from_power_on) {
+        notify_remote_local = true;
+        notify_addressed_changed = true;
+    }
     if (notify_remote_local && ieee488_device.cb.remote_changed)
         ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, false, false);
+    if (notify_addressed_changed && ieee488_device.cb.addressed_changed)
+        ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, 0, 0, false);
 }
 
 /** @brief Initialize the IEEE 488 device with the given HAL, configuration, and callbacks.
@@ -206,7 +214,7 @@ void ieee488_init(const ieee488_config_t* c, const ieee488_callbacks_t* cb) {
     ieee488_device.cfg = *c;
     if (cb) ieee488_device.cb = *cb;
     hal_init();
-    ieee488_reset();
+    ieee488_reset(true);
 }
 
 /** @brief Request or clear a service request.
@@ -618,4 +626,15 @@ void ieee488_poll(void) {
 
     // bool active = !atn && (ieee488_device.talker == IEEE488_T_TACS || ieee488_device.talker == IEEE488_T_SPAS);
     source(atn);
+
+    if (ieee488_device.cb.addressed_changed) {
+        bool addressed = false;
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+            addressed = (ieee488_device.listener == IEEE488_L_LADS || ieee488_device.listener == IEEE488_L_LACS);
+        }
+        if (addressed != ieee488_device.last_addressed) {
+            ieee488_device.last_addressed = addressed;
+            ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, 0, 0, addressed);
+        }
+    }
 }
