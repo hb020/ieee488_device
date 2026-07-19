@@ -219,7 +219,7 @@ typedef struct ieee488_device {
     uint8_t tx_byte;                              // the byte loaded for transmission.
     uint32_t deadline;                            // the time by which the current operation must complete, in microseconds.
     uint32_t state_since;                         // the time since the last state change, in microseconds.
-    bool last_ifc, last_atn, last_dav, last_eoi;  // the last states of the interface signals.
+    bool last_ifc, last_atn, last_dav, last_eoi, last_idy;  // the last states of the interface signals.
 } ieee488_device_t;
 
 extern ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance.

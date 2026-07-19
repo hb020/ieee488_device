@@ -97,7 +97,6 @@ static void print_command(uint8_t b) {
         case IEEE488_CMD_SPD: Serial.print("SPD"); break;
         case IEEE488_CMD_UNL: Serial.print("UNL"); break;
         case IEEE488_CMD_UNT: Serial.print("UNT"); break;
-        case 0x55: Serial.print("TE "); break;
         default:
             if ((b & 0x60u) == 0x20u) {
                 Serial.print("L");

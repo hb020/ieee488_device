@@ -184,6 +184,9 @@ void ieee488_init(const ieee488_config_t* c, const ieee488_callbacks_t* cb) {
     ieee488_device.last_ifc = hal_read_line(IEEE488_IFC);
     ieee488_device.last_atn = hal_read_line(IEEE488_ATN);
     ieee488_device.last_dav = hal_read_line(IEEE488_DAV);
+    ieee488_device.last_eoi = hal_read_line(IEEE488_EOI);
+    // TODO: use hal_read_line(IEEE488_ATN_AND_EOI);
+    ieee488_device.last_idy = ieee488_device.last_atn && ieee488_device.last_eoi;
 }
 
 /** @brief Request or clear a service request.
@@ -399,7 +402,7 @@ static void source(bool atn) {
 //
 // ATN and EOI reactions are handled in an interrupt handler for t2/t5 compliance.
 
-static inline void atn_handler(bool atn, bool eoi) {
+static inline void atn_handler(bool atn) {
     /* t2, t5: immediate state changes on ATN + EOI transition (must be called from ISR) */
     // t2: SH, AH, T, L, LE, TE state transition on ATN
     if (atn) {
@@ -414,9 +417,10 @@ static inline void atn_handler(bool atn, bool eoi) {
         if (ieee488_device.talker == IEEE488_T_TADS) ieee488_device.talker = ieee488_device.serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
         if (ieee488_device.listener == IEEE488_L_LADS) ieee488_device.listener = IEEE488_L_LACS;
     }
+}
 
+static inline void idy_handler(bool idy) {
     /* t5: PP state transition on ATN ^ EOI */
-     bool idy = atn && eoi;
     if (ieee488_device.pp_configured) {
         if (idy) {
             ieee488_device.pp = IEEE488_PP_PPAS;
@@ -431,16 +435,25 @@ static inline void atn_handler(bool atn, bool eoi) {
     }
 }
 
-#ifdef ATN_IN_INTR_HANDLER
-// This interrupt handler is called when either ATN or EOI changes state.
+#ifdef ATN_INTR_HANDLER
+// This interrupt handler is called when either ATN changes state.
 // It is expected to be called from an interrupt context, and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
 void ieee488_handle_atn_interrupt(void) {
     bool atn = hal_read_line(IEEE488_ATN);
-    bool eoi = hal_read_line(IEEE488_EOI);
-    if ((atn != ieee488_device.last_atn) || (eoi != ieee488_device.last_eoi)) {
-        atn_handler(atn, eoi);
+    if ((atn != ieee488_device.last_atn)) {
+        atn_handler(atn);
         ieee488_device.last_atn = atn;
-        ieee488_device.last_eoi = eoi;
+    }
+}
+#endif
+#ifdef IDY_INTR_HANDLER
+// This interrupt handler is called when ATN && EOI (IDY) changes state.
+// It is expected to be called from an interrupt context, and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
+void ieee488_handle_idy_interrupt(void) {
+    bool idy = hal_read_line(IEEE488_ATN_AND_EOI);
+    if (idy != ieee488_device.last_idy) {
+        idy_handler(idy);
+        ieee488_device.last_idy = idy;
     }
 }
 #endif
@@ -450,18 +463,26 @@ void ieee488_handle_atn_interrupt(void) {
 void ieee488_poll(void) {
     bool ifc = hal_read_line(IEEE488_IFC), ren = hal_read_line(IEEE488_REN);
 
-#ifndef ATN_IN_INTR_HANDLER
+#ifndef ATN_INTR_HANDLER
     bool atn = hal_read_line(IEEE488_ATN);
-    bool eoi = hal_read_line(IEEE488_EOI);
-    if ((atn != ieee488_device.last_atn) || (eoi != ieee488_device.last_eoi)) {
+    if (atn != ieee488_device.last_atn) {
         ieee488_device.last_atn = atn;
-        ieee488_device.last_eoi = eoi;
-        atn_handler(atn, eoi);
+        atn_handler(atn);
     }
 #else
     // get the values from the interrupt handler, which should have been called on ATN or EOI change
     bool atn = ieee488_device.last_atn;
-    bool eoi = ieee488_device.last_eoi;
+#endif
+#ifndef IDY_INTR_HANDLER
+    // TODO: use hal_read_line(IEEE488_ATN_AND_EOI);
+    bool idy = atn && hal_read_line(IEEE488_EOI);
+    if (idy != ieee488_device.last_idy) {
+        ieee488_device.last_idy = idy;
+        idy_handler(idy);
+    }
+#else
+    // get the values from the interrupt handler, which should have been called on ATN or EOI change
+    bool idy = atn && hal_read_line(IEEE488_EOI);
 #endif
 
     if (ifc) { /* IFC: T and L return idle within t4, 2.5/2.6; serial poll reset. */
@@ -493,7 +514,6 @@ void ieee488_poll(void) {
     hal_drive_line(IEEE488_SRQ, ieee488_device.sr == IEEE488_SR_SQRS);
 
     /* During a parallel poll AH must not interpret DIO as a command byte. */
-    bool idy = atn && eoi;
     if (!idy)
         acceptor(atn);
 

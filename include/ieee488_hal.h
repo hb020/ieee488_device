@@ -10,9 +10,10 @@ extern "C" {
 
 // Determine if the ATN line is being handled in an interrupt context.
 // This can be used to achieve the timing constraints around ATN changes if the entire loop takes too much time.
-// #define ATN_IN_INTR_HANDLER
-
-// TODO: when I move to INTR handler, SPOLL works, but I can no longer interact with the bus.
+#define ATN_INTR_HANDLER
+// Determine if the IDY state (ATN && EOI) line is being handled in an interrupt context.
+// This can be used to achieve the timing constraints around IDY changes if the entire loop takes too much time.
+// #define IDY_INTR_HANDLER
 
 // When the pins are physically LOW, they are true (asserted) in the IEEE 488.1-1987 standard. 
 // When the pins are physically HIGH, they are false (released) in the standard. 

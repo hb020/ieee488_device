@@ -5,7 +5,7 @@
 
 // See "ieee488_hal_ATmega4809.h" for the HAL interface definition.
 
-#ifdef ATN_IN_INTR_HANDLER  
+#ifdef ATN_INTR_HANDLER  
 // Interrupt handler for ATN line (PC6)
 // EOI line (PC0) could maybe be handled similarly if needed, but for now, we focus on ATN.
 // EOI + ATN could be handled via CCL (Configurable Custom Logic) if needed, but for now, we focus on ATN.
@@ -16,7 +16,10 @@ ISR(PORTC_PORT_vect) {
     PORTC.INTFLAGS = (1 << 6); // Clear the interrupt flag for ATN
   }
 }
-#endif  // ATN_IN_INTR_HANDLER
+
+// TODO add CCL for EOI + ATN if needed, but for now, we focus on ATN.
+
+#endif  // ATN_INTR_HANDLER
 
 
 /** @brief Initialize the HAL.
@@ -45,7 +48,7 @@ bool hal_init(void) {
   PORTC.PIN7CTRL |= PORT_PULLUPEN_bm;
   PORTC.DIRCLR = 0b11111111;
 
-#ifdef ATN_IN_INTR_HANDLER  
+#ifdef ATN_INTR_HANDLER
   PORTC.PIN6CTRL |= PORT_ISC_BOTHEDGES_gc; // Enable interrupt on both edges for ATN (PC6)
 #endif
   return true;

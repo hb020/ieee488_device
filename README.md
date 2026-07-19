@@ -20,9 +20,6 @@ Mostly working:
 No working:
 
 - timing
-
-To be tested:
-
 - parallel poll
 
 ## Supported functions/capabilities
