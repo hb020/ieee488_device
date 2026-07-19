@@ -1,6 +1,6 @@
 # IEEE-488.1 (GPIB) device library
 
-Portable C99 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
+Portable gnu11 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
 
 This can be used to create:
 
@@ -12,14 +12,21 @@ This can be used to create:
 
 This is an early version.
 
-Mostly working:
+Working:
 
 - serial poll
 - read/write
+- trigger
+- remote/local
+- clear
 
-No working:
+Not compliant:
 
-- timing
+- timing on an AT4809. The fastest I can get is 650ns for t2, while it should be 200ns. But all my gateways have no problem with it.
+
+TODO:
+
+- collaboration between interrupt handler and the regular poller in the `acceptor()` and `source()` functions.
 - parallel poll
 
 ## Supported functions/capabilities
@@ -64,11 +71,17 @@ IEEE-488 uses negative-true signalling and wired-OR behavior. The HAL uses **log
 
 ## Integration
 
-1. Implement the seven HAL functions in `ieee488_hal.h`.
+1. Implement the several functions and macros mentioned in`ieee488_hal.h`.
 2. Set primary/secondary addresses and timing in `ieee488_config_t`.
 3. Implement callbacks for device-dependent data and actions.
 
 The polling implementation is non-blocking. For high transfer rates, use threading and/or GPIO edge interrupts, or translate the same FSM into an FPGA/peripheral implementation.
+
+A basic interrupt mechanism is in place on ATN and IDY (ATN ^ EOI).
+
+The mechanism needed for syncing between the ISR and the main code is affected by 8 bit Arduino limitations: `#include <stdatomic.h>` is not supported (yet). Therefore, I use `volatile`, `#include <util/atomic.h>` and `ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { .... }`.
+
+If you want to move to a better chain, you WILL want to use atomic variables.
 
 ## Important conformance notes
 

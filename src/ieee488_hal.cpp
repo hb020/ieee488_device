@@ -7,8 +7,6 @@
 
 #ifdef ATN_INTR_HANDLER  
 // Interrupt handler for ATN line (PC6)
-// EOI line (PC0) could maybe be handled similarly if needed, but for now, we focus on ATN.
-// EOI + ATN could be handled via CCL (Configurable Custom Logic) if needed, but for now, we focus on ATN.
 ISR(PORTC_PORT_vect) {
   if (PORTC.INTFLAGS & (1 << 6)) { // Check if ATN triggered the interrupt
     ieee488_handle_atn_interrupt(); // Call the handler for ATN interrupt
@@ -16,10 +14,9 @@ ISR(PORTC_PORT_vect) {
     PORTC.INTFLAGS = (1 << 6); // Clear the interrupt flag for ATN
   }
 }
+#endif  // ATN_INTR_HANDLER
 
 // TODO add CCL for EOI + ATN if needed, but for now, we focus on ATN.
-
-#endif  // ATN_INTR_HANDLER
 
 
 /** @brief Initialize the HAL.

@@ -1,6 +1,7 @@
 #include "ieee488.h"
 #include "ieee488_hal.h"
 #include <string.h>
+#include <util/atomic.h>
 
 ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance.
 
@@ -57,7 +58,9 @@ static bool pcg(uint8_t b) { return (b & 0x60u) != 0x60u; }
 static void set_rl(ieee488_rl_state_t s) {
     if (ieee488_device.rl == s) return;
     ieee488_device.rl = s;
-    if (ieee488_device.cb.remote_changed) ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, s == IEEE488_RL_REMS || s == IEEE488_RL_RWLS, s == IEEE488_RL_LWLS || s == IEEE488_RL_RWLS);
+    bool remote = (s == IEEE488_RL_REMS || s == IEEE488_RL_RWLS);
+    bool lockout = (s == IEEE488_RL_LWLS || s == IEEE488_RL_RWLS);
+    if (ieee488_device.cb.remote_changed) ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, remote, lockout);
 }
 
 /** @brief Decode an IEEE 488 command byte and update the device state accordingly.
@@ -67,6 +70,7 @@ static void set_rl(ieee488_rl_state_t s) {
 static void decode_command(uint8_t b) {
     if (ieee488_device.cb.command_seen) ieee488_device.cb.command_seen(ieee488_device.cb.ctx, b, true);
     bool addressed = (ieee488_device.listener == IEEE488_L_LADS);
+    bool was_listener_addressed = (ieee488_device.listener == IEEE488_L_LADS || ieee488_device.listener == IEEE488_L_LACS);
 
     /* If PPC was seen for this addressed device, next SCG byte is PPE/PPD context,
        not extended secondary addressing. */
@@ -98,7 +102,17 @@ static void decode_command(uint8_t b) {
             ieee488_device.listener = IEEE488_L_LADS;
     }
 
+    /* RL1, 2.8: enter remote on listen-addressing event while REN is asserted. */
+    bool listener_addressed = (ieee488_device.listener == IEEE488_L_LADS || ieee488_device.listener == IEEE488_L_LACS);
+    if (REN_IS_ASSERTED() && listener_addressed && !was_listener_addressed) {
+        if (ieee488_device.rl == IEEE488_RL_LOCS)
+            set_rl(IEEE488_RL_REMS);
+        else if (ieee488_device.rl == IEEE488_RL_LWLS)
+            set_rl(IEEE488_RL_RWLS);
+    }
+
     /* Universal and addressed commands, 2.7-2.11 and 2.13. */
+    ieee488_rl_state_t rl = ieee488_device.rl;
     switch (b) {
         case IEEE488_CMD_DCL:
             if (ieee488_device.cb.device_clear) ieee488_device.cb.device_clear(ieee488_device.cb.ctx, false);
@@ -110,16 +124,16 @@ static void decode_command(uint8_t b) {
             if (addressed && ieee488_device.cb.device_trigger) ieee488_device.cb.device_trigger(ieee488_device.cb.ctx);
             break;
         case IEEE488_CMD_LLO:
-            if (ieee488_device.rl == IEEE488_RL_LOCS)
+            if (rl == IEEE488_RL_LOCS)
                 set_rl(IEEE488_RL_LWLS);
-            else if (ieee488_device.rl == IEEE488_RL_REMS)
+            else if (rl == IEEE488_RL_REMS)
                 set_rl(IEEE488_RL_RWLS);
             break;
         case IEEE488_CMD_GTL:
             if (addressed) {
-                if (ieee488_device.rl == IEEE488_RL_REMS)
+                if (rl == IEEE488_RL_REMS)
                     set_rl(IEEE488_RL_LOCS);
-                else if (ieee488_device.rl == IEEE488_RL_RWLS)
+                else if (rl == IEEE488_RL_RWLS)
                     set_rl(IEEE488_RL_LWLS);
             }
             break;
@@ -149,26 +163,38 @@ static void decode_command(uint8_t b) {
 /** @brief Reset the IEEE 488 device to its initial state.
  */
 void ieee488_reset(void) {
-    ieee488_device.sh = IEEE488_SH_SIDS;
-    ieee488_device.ah = IEEE488_AH_AIDS;
-    ieee488_device.talker = IEEE488_T_TIDS;
-    ieee488_device.listener = IEEE488_L_LIDS;
-    ieee488_device.sr = IEEE488_SR_NPRS;
-    set_rl(IEEE488_RL_LOCS);
-    ieee488_device.pp = IEEE488_PP_PPIS;
-    ieee488_device.serial_poll_mode = false;
-    ieee488_device.talk_primary_addressed = false;
-    ieee488_device.listen_primary_addressed = false;
-    ieee488_device.pp_config_addressed = false;
-    ieee488_device.pp_configured = false;
-    ieee488_device.service_pending = false;
-    ieee488_device.tx_loaded = false;
-    hal_drive_dio(0, false);
-    hal_drive_line(IEEE488_DAV, false);
-    hal_drive_line(IEEE488_NRFD, true);
-    hal_drive_line(IEEE488_NDAC, true);
-    hal_drive_line(IEEE488_SRQ, false);
-    hal_drive_line(IEEE488_EOI, false);
+    bool notify_remote_local = false;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        ieee488_device.sh = IEEE488_SH_SIDS;
+        ieee488_device.ah = IEEE488_AH_AIDS;
+        ieee488_device.talker = IEEE488_T_TIDS;
+        ieee488_device.listener = IEEE488_L_LIDS;
+        ieee488_device.sr = IEEE488_SR_NPRS;
+        notify_remote_local = (ieee488_device.rl != IEEE488_RL_LOCS);
+        ieee488_device.rl = IEEE488_RL_LOCS;
+        ieee488_device.pp = IEEE488_PP_PPIS;
+        ieee488_device.serial_poll_mode = false;
+        ieee488_device.talk_primary_addressed = false;
+        ieee488_device.listen_primary_addressed = false;
+        ieee488_device.pp_config_addressed = false;
+        ieee488_device.pp_configured = false;
+        ieee488_device.service_pending = false;
+        ieee488_device.tx_loaded = false;
+        ieee488_device.restart_loop = false;
+        hal_drive_dio(0, false);
+        DAV_RELEASE();
+        NRFD_ASSERT();
+        NDAC_ASSERT();
+        SRQ_RELEASE();
+        EOI_RELEASE();
+        ieee488_device.last_atn = ATN_IS_ASSERTED();
+        ieee488_device.last_eoi = EOI_IS_ASSERTED();
+        ieee488_device.last_idy = IDY_IS_ASSERTED();
+        ieee488_device.last_ren = REN_IS_ASSERTED();
+    }
+
+    if (notify_remote_local && ieee488_device.cb.remote_changed)
+        ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, false, false);
 }
 
 /** @brief Initialize the IEEE 488 device with the given HAL, configuration, and callbacks.
@@ -181,12 +207,6 @@ void ieee488_init(const ieee488_config_t* c, const ieee488_callbacks_t* cb) {
     if (cb) ieee488_device.cb = *cb;
     hal_init();
     ieee488_reset();
-    ieee488_device.last_ifc = hal_read_line(IEEE488_IFC);
-    ieee488_device.last_atn = hal_read_line(IEEE488_ATN);
-    ieee488_device.last_dav = hal_read_line(IEEE488_DAV);
-    ieee488_device.last_eoi = hal_read_line(IEEE488_EOI);
-    // TODO: use hal_read_line(IEEE488_ATN_AND_EOI);
-    ieee488_device.last_idy = ieee488_device.last_atn && ieee488_device.last_eoi;
 }
 
 /** @brief Request or clear a service request.
@@ -205,8 +225,6 @@ void ieee488_request_service(bool request) {
 void ieee488_return_to_local(void) {
     if (ieee488_device.rl == IEEE488_RL_REMS)
         set_rl(IEEE488_RL_LOCS);
-    else if (ieee488_device.rl == IEEE488_RL_RWLS)
-        set_rl(IEEE488_RL_LWLS);
 }
 
 /** @brief Set the individual status flag.
@@ -250,8 +268,8 @@ bool ieee488_is_remote(void) { return ieee488_device.rl == IEEE488_RL_REMS || ie
  */
 static inline void acceptor_force_idle(void) {
     /* Not participating in handshake: do not hold shared listener lines. */
-    hal_drive_line(IEEE488_NRFD, false);
-    hal_drive_line(IEEE488_NDAC, false);
+    NRFD_RELEASE();
+    NDAC_RELEASE();
     ieee488_device.ah = IEEE488_AH_AIDS;
 }
 
@@ -260,7 +278,7 @@ static inline void acceptor_force_idle(void) {
  * @param atn The state of the ATN line.
  */
 static void acceptor(bool atn) {
-    bool dav = hal_read_line(IEEE488_DAV);
+    bool dav = DAV_IS_ASSERTED();
     /* AH1, 2.4: handshake every command byte and data only while LACS. */
     bool accept = atn || ieee488_device.listener == IEEE488_L_LACS;
     if (!accept) {
@@ -271,8 +289,8 @@ static void acceptor(bool atn) {
     switch (ieee488_device.ah) {
         case IEEE488_AH_AIDS:
         case IEEE488_AH_ANRS:
-            hal_drive_line(IEEE488_NDAC, true);
-            hal_drive_line(IEEE488_NRFD, false);
+            NDAC_ASSERT();
+            NRFD_RELEASE();
             ieee488_device.ah = IEEE488_AH_ACRS;
             arm();
             break;
@@ -280,13 +298,13 @@ static void acceptor(bool atn) {
         case IEEE488_AH_ACRS:
             /* No timeout here: waiting for DAV start is an idle condition, not an in-progress byte. */
             if (dav) {
-                hal_drive_line(IEEE488_NRFD, true);
+                NRFD_ASSERT();
                 uint8_t b = hal_read_dio();
                 if (atn)
                     decode_command(b);
                 else if (ieee488_device.cb.rx_byte)
-                    ieee488_device.cb.rx_byte(ieee488_device.cb.ctx, b, hal_read_line(IEEE488_EOI) || (ieee488_device.cfg.eos_enabled && b == ieee488_device.cfg.eos_byte));
-                hal_drive_line(IEEE488_NDAC, false);
+                    ieee488_device.cb.rx_byte(ieee488_device.cb.ctx, b, EOI_IS_ASSERTED() || (ieee488_device.cfg.eos_enabled && b == ieee488_device.cfg.eos_byte));
+                NDAC_RELEASE();
                 ieee488_device.ah = IEEE488_AH_ACDS;
                 arm();
             }
@@ -294,8 +312,8 @@ static void acceptor(bool atn) {
 
         case IEEE488_AH_ACDS:
             if (!dav) {
-                hal_drive_line(IEEE488_NDAC, true);
-                hal_drive_line(IEEE488_NRFD, false);
+                NDAC_ASSERT();
+                NRFD_RELEASE();
                 ieee488_device.ah = IEEE488_AH_ACRS;
                 arm();
             } else if (expired()) {
@@ -314,8 +332,8 @@ static void acceptor(bool atn) {
  * @param drop_tx true to drop the current transmit byte, false to keep it.
  */
 static inline void source_force_idle(bool drop_tx) {
-    hal_drive_line(IEEE488_DAV, false);
-    hal_drive_line(IEEE488_EOI, false);
+    DAV_RELEASE();
+    EOI_RELEASE();
     hal_drive_dio(0, false);
     ieee488_device.sh = IEEE488_SH_SIDS;
     if (drop_tx) ieee488_device.tx_loaded = false;
@@ -344,7 +362,11 @@ static void source(bool atn) {
             }
             if (ieee488_device.tx_loaded) {
                 hal_drive_dio(ieee488_device.tx_byte, true);
-                hal_drive_line(IEEE488_EOI, ieee488_device.cfg.use_eoi && ieee488_device.tx_end);
+                if (ieee488_device.cfg.use_eoi && ieee488_device.tx_end) {
+                    EOI_ASSERT();
+                } else {
+                    EOI_RELEASE();
+                }
                 ieee488_device.state_since = now();
                 ieee488_device.sh = IEEE488_SH_SDYS;
                 arm();
@@ -352,8 +374,8 @@ static void source(bool atn) {
             break;
 
         case IEEE488_SH_SDYS:
-            if (!hal_read_line(IEEE488_NRFD) && (uint32_t)(now() - ieee488_device.state_since) >= ieee488_device.cfg.t1_delay_us) {
-                hal_drive_line(IEEE488_DAV, true);
+            if (!NRFD_IS_ASSERTED() && (uint32_t)(now() - ieee488_device.state_since) >= ieee488_device.cfg.t1_delay_us) {
+                DAV_ASSERT();
                 ieee488_device.sh = IEEE488_SH_STRS;
                 arm();
             } else if (expired()) {
@@ -362,8 +384,8 @@ static void source(bool atn) {
             break;
 
         case IEEE488_SH_STRS:
-            if (!hal_read_line(IEEE488_NDAC)) {
-                hal_drive_line(IEEE488_DAV, false);
+            if (!NDAC_IS_ASSERTED()) {
+                DAV_RELEASE();
                 ieee488_device.sh = IEEE488_SH_SWNS;
                 arm();
             } else if (expired()) {
@@ -372,7 +394,7 @@ static void source(bool atn) {
             break;
 
         case IEEE488_SH_SWNS:
-            if (hal_read_line(IEEE488_NDAC)) {
+            if (NDAC_IS_ASSERTED()) {
                 ieee488_device.tx_loaded = false;
                 ieee488_device.sh = IEEE488_SH_SIDS;
                 if (ieee488_device.talker == IEEE488_T_SPAS && ieee488_device.sr == IEEE488_SR_APRS) {
@@ -402,22 +424,58 @@ static void source(bool atn) {
 //
 // ATN and EOI reactions are handled in an interrupt handler for t2/t5 compliance.
 
+/** @brief Handle the ATN state change and update the device state accordingly.
+ * 
+ * Only to be called when the ATN line changes.
+ * 
+ * It can modify:
+ * 
+ *  - restart_loop
+ * 
+ *  - sh, to SIDS. If so, then it will have modified DAV, EOI, and the data lines.
+ * 
+ *  - ah, to AIDS. If so, then it will have modified NRFD and NDAC.
+ * 
+ *  - talker, to TADS, SPAS or TACS
+ * 
+ *  - listener, to LADS or LACS
+ *
+ * @param atn The new state of the ATN line.
+ */
 static inline void atn_handler(bool atn) {
-    /* t2, t5: immediate state changes on ATN + EOI transition (must be called from ISR) */
     // t2: SH, AH, T, L, LE, TE state transition on ATN
     if (atn) {
         // ATN asserted: transition active talker/listener to addressed, and force source/acceptor to idle
-        source_force_idle(true);
-        acceptor_force_idle();        
+        if (ieee488_device.sh != IEEE488_SH_SIDS) {
+            source_force_idle(true);
+            ieee488_device.restart_loop = true;  // restart the main loop to handle the new state
+        }
+        if (ieee488_device.ah != IEEE488_AH_AIDS) {
+            acceptor_force_idle();
+            ieee488_device.restart_loop = true;  // restart the main loop to handle the new state
+        }
         /* ATN asserted: transition active talker/listener to addressed */
-        if (ieee488_device.talker == IEEE488_T_TACS || ieee488_device.talker == IEEE488_T_SPAS) ieee488_device.talker = IEEE488_T_TADS;
-        if (ieee488_device.listener == IEEE488_L_LACS) ieee488_device.listener = IEEE488_L_LADS;
+        if (ieee488_device.talker == IEEE488_T_TACS || ieee488_device.talker == IEEE488_T_SPAS) {
+            ieee488_device.talker = IEEE488_T_TADS;
+            ieee488_device.restart_loop = true;  // restart the main loop to handle the new state
+        }
+        if (ieee488_device.listener == IEEE488_L_LACS) {
+            ieee488_device.listener = IEEE488_L_LADS;
+            ieee488_device.restart_loop = true;  // restart the main loop to handle the new state
+        }
     } else {
         /* ATN released: transition addressed talker/listener to active */
-        if (ieee488_device.talker == IEEE488_T_TADS) ieee488_device.talker = ieee488_device.serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
-        if (ieee488_device.listener == IEEE488_L_LADS) ieee488_device.listener = IEEE488_L_LACS;
+        if (ieee488_device.talker == IEEE488_T_TADS) {
+            ieee488_device.talker = ieee488_device.serial_poll_mode ? IEEE488_T_SPAS : IEEE488_T_TACS;
+            ieee488_device.restart_loop = true;  // restart the main loop to handle the new state
+        }
+        if (ieee488_device.listener == IEEE488_L_LADS) {
+            ieee488_device.listener = IEEE488_L_LACS;
+            ieee488_device.restart_loop = true;  // restart the main loop to handle the new state
+        }
     }
 }
+
 
 static inline void idy_handler(bool idy) {
     /* t5: PP state transition on ATN ^ EOI */
@@ -426,99 +484,138 @@ static inline void idy_handler(bool idy) {
             ieee488_device.pp = IEEE488_PP_PPAS;
             uint8_t v = (ieee488_device.individual_status == ieee488_device.pp_sense) ? (uint8_t)(1u << (ieee488_device.pp_line - 1u)) : 0;
             hal_drive_dio(v, v != 0);
-            hal_drive_line(IEEE488_NRFD, true);
-            hal_drive_line(IEEE488_NDAC, true);            
+            NRFD_ASSERT();
+            NDAC_ASSERT();            
         } else if (ieee488_device.pp == IEEE488_PP_PPAS && !idy) {
             ieee488_device.pp = IEEE488_PP_PPSS;
             hal_drive_dio(0, false);
         }
+
+        // TODO: I might be able to do ppol completeley here
     }
 }
 
 #ifdef ATN_INTR_HANDLER
-// This interrupt handler is called when either ATN changes state.
-// It is expected to be called from an interrupt context, and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
-void ieee488_handle_atn_interrupt(void) {
-    bool atn = hal_read_line(IEEE488_ATN);
-    if ((atn != ieee488_device.last_atn)) {
-        atn_handler(atn);
-        ieee488_device.last_atn = atn;
-    }
+/** @brief Handle an ATN interrupt.
+ *
+ * This interrupt handler should be called when ATN changes state.
+ * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
+ */
+void inline ieee488_handle_atn_interrupt(void) {
+    bool atn = ATN_IS_ASSERTED();
+    atn_handler(atn);
+    ieee488_device.last_atn = atn;
 }
 #endif
 #ifdef IDY_INTR_HANDLER
-// This interrupt handler is called when ATN && EOI (IDY) changes state.
-// It is expected to be called from an interrupt context, and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
-void ieee488_handle_idy_interrupt(void) {
-    bool idy = hal_read_line(IEEE488_ATN_AND_EOI);
-    if (idy != ieee488_device.last_idy) {
-        idy_handler(idy);
-        ieee488_device.last_idy = idy;
-    }
+#error "Not finished yet, set up CCL, set up sync between INTR handler and the rest"
+/** @brief Handle an IDY (ATN && EOI) interrupt.
+ *
+ * This interrupt handler should be called when (ATN && EOI) change state.
+ * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
+ */
+void inline ieee488_handle_idy_interrupt(void) {
+    bool idy = IDY_IS_ASSERTED();
+    idy_handler(idy);
+    ieee488_device.last_idy = idy;
 }
 #endif
 
 // TODO make sure that whatever the interrupt handler controls, is compatible with the rest of the code
 
 void ieee488_poll(void) {
-    bool ifc = hal_read_line(IEEE488_IFC), ren = hal_read_line(IEEE488_REN);
-
+    
 #ifndef ATN_INTR_HANDLER
-    bool atn = hal_read_line(IEEE488_ATN);
+    bool atn = ATN_IS_ASSERTED();
     if (atn != ieee488_device.last_atn) {
-        ieee488_device.last_atn = atn;
         atn_handler(atn);
+        ieee488_device.last_atn = atn;
     }
 #else
-    // get the values from the interrupt handler, which should have been called on ATN or EOI change
-    bool atn = ieee488_device.last_atn;
+    // get the values from the interrupt handler, which should have been called on ATN change
+    bool atn = false;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        atn = ieee488_device.last_atn;
+        ieee488_device.restart_loop = false;  // reset the restart_loop flag after handling the ATN change
+    }
 #endif
 #ifndef IDY_INTR_HANDLER
-    // TODO: use hal_read_line(IEEE488_ATN_AND_EOI);
-    bool idy = atn && hal_read_line(IEEE488_EOI);
+    bool idy = IDY_IS_ASSERTED();
     if (idy != ieee488_device.last_idy) {
-        ieee488_device.last_idy = idy;
         idy_handler(idy);
+        ieee488_device.last_idy = idy;
     }
 #else
     // get the values from the interrupt handler, which should have been called on ATN or EOI change
-    bool idy = atn && hal_read_line(IEEE488_EOI);
+    bool idy = false;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        idy = ieee488_device.last_idy;
+    }
 #endif
 
-    if (ifc) { /* IFC: T and L return idle within t4, 2.5/2.6; serial poll reset. */
-        ieee488_device.talker = IEEE488_T_TIDS;
-        ieee488_device.listener = IEEE488_L_LIDS;
-        ieee488_device.serial_poll_mode = false;
-        ieee488_device.talk_primary_addressed = false;
-        ieee488_device.listen_primary_addressed = false;
+    // This section is fast, and makes no change to the pins, or calls anything, but it makes changes to talker and listener, so run in a block
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        if (ieee488_device.restart_loop) return;
+
+        bool ifc = IFC_IS_ASSERTED();
+        if (ifc) { /* IFC: T and L return idle within t4, 2.5/2.6; serial poll reset. */
+            ieee488_device.talker = IEEE488_T_TIDS;
+            ieee488_device.listener = IEEE488_L_LIDS;
+            ieee488_device.serial_poll_mode = false;
+            ieee488_device.talk_primary_addressed = false;
+            ieee488_device.listen_primary_addressed = false;
+        }
+        if (ieee488_device.cfg.talk_only && !ifc) ieee488_device.talker = IEEE488_T_TADS;
+        if (ieee488_device.cfg.listen_only && !ifc) ieee488_device.listener = IEEE488_L_LADS;
     }
-    if (ieee488_device.cfg.talk_only && !ifc) ieee488_device.talker = IEEE488_T_TADS;
-    if (ieee488_device.cfg.listen_only && !ifc) ieee488_device.listener = IEEE488_L_LADS;
+
+    if (ieee488_device.restart_loop) return;
 
     /* RL1, 2.8: MLA while REN enters remote; REN false returns local unless locked out. */
+    bool ren = REN_IS_ASSERTED();
+    bool ren_rise = false;
+    ren_rise = ren && !ieee488_device.last_ren;
+    ieee488_device.last_ren = ren;
+    // Listener state can have been modified by the INTR handler
+    ieee488_l_state_t listener_state = IEEE488_L_LIDS;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        listener_state = ieee488_device.listener;
+    }
     if (!ren) {
         if (ieee488_device.rl == IEEE488_RL_REMS)
             set_rl(IEEE488_RL_LOCS);
         else if (ieee488_device.rl == IEEE488_RL_RWLS)
             set_rl(IEEE488_RL_LWLS);
-    } else if (ieee488_device.listener == IEEE488_L_LADS || ieee488_device.listener == IEEE488_L_LACS) {
+    } else if (ren_rise && (listener_state == IEEE488_L_LADS || listener_state == IEEE488_L_LACS)) {
         if (ieee488_device.rl == IEEE488_RL_LOCS)
             set_rl(IEEE488_RL_REMS);
         else if (ieee488_device.rl == IEEE488_RL_LWLS)
             set_rl(IEEE488_RL_RWLS);
     }
 
+    if (ieee488_device.restart_loop) return;
+
+    // Talker state can have been modified by the INTR handler
+    ieee488_t_state_t talker_state = IEEE488_T_TIDS;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        talker_state = ieee488_device.talker;
+    }
     /* SR1, 2.7: SRQ asserted in SQRS; serial poll response latches APRS. */
     if (ieee488_device.service_pending && ieee488_device.sr == IEEE488_SR_NPRS) ieee488_device.sr = IEEE488_SR_SQRS;
-    if (ieee488_device.talker == IEEE488_T_SPAS && ieee488_device.sr == IEEE488_SR_SQRS) ieee488_device.sr = IEEE488_SR_APRS;
-    hal_drive_line(IEEE488_SRQ, ieee488_device.sr == IEEE488_SR_SQRS);
+    if (talker_state == IEEE488_T_SPAS && ieee488_device.sr == IEEE488_SR_SQRS) ieee488_device.sr = IEEE488_SR_APRS;
+    if (ieee488_device.sr == IEEE488_SR_SQRS) {
+        SRQ_ASSERT();
+    } else {
+        SRQ_RELEASE();
+    }
+
+    if (ieee488_device.restart_loop) return;
 
     /* During a parallel poll AH must not interpret DIO as a command byte. */
+    // bool accept = atn || ieee488_device.listener == IEEE488_L_LACS;
     if (!idy)
         acceptor(atn);
 
+    // bool active = !atn && (ieee488_device.talker == IEEE488_T_TACS || ieee488_device.talker == IEEE488_T_SPAS);
     source(atn);
-
-    ieee488_device.last_ifc = ifc;
-    ieee488_device.last_dav = hal_read_line(IEEE488_DAV);
 }

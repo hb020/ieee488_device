@@ -44,57 +44,35 @@ extern "C" {
 
 // This is not a controller, so I can use all open collector lines
 
-/** @brief Convert an IEEE488 line to the corresponding port bit.
- * @param line The IEEE488 line to convert.
- * @return The corresponding port mask for the line.
- */
-inline uint8_t line_to_mask(ieee488_ctrl_line_t line) {
-  switch (line)
-  {
-    case IEEE488_DAV:
-      return 1 << 1; // PC1
-    case IEEE488_NRFD:
-      return 1 << 2; // PC2
-    case IEEE488_NDAC:
-      return 1 << 3; // PC3
-    case IEEE488_ATN:
-      return 1 << 6; // PC6
-    case IEEE488_IFC:
-      return 1 << 4; // PC4
-    case IEEE488_SRQ:
-      return 1 << 5; // PC5
-    case IEEE488_REN:
-      return 1 << 7; // PC7
-    case IEEE488_EOI:
-      return 1 << 0; // PC0
-    default:
-      return 0; // Invalid line
-  } 
-}
+// Preprocessor definitions for handling the pins, because functions are too slow
 
-/** @brief Read the state of a command line (bit).
- * @param line The line (bit) to read. See ieee488_ctrl_line_t, 8..15.
- * @return true if the line is asserted, false otherwise.
- */
-inline bool hal_read_line(ieee488_ctrl_line_t line) {
-  uint8_t mask = line_to_mask(line);
-  // do not change the PORTC.DIRCLR = mask as the pin may have been set as output
-  return (PORTC.IN & mask) == 0; // Asserted if the pin is LOW
-}
+#define DAV_IS_ASSERTED() ((PORTC.IN & 0x02) == 0)
+#define NRFD_IS_ASSERTED() ((PORTC.IN & 0x04) == 0)
+#define NDAC_IS_ASSERTED() ((PORTC.IN & 0x08) == 0)
+#define ATN_IS_ASSERTED() ((PORTC.IN & 0x40) == 0)
+#define IFC_IS_ASSERTED() ((PORTC.IN & 0x10) == 0)
+#define SRQ_IS_ASSERTED() ((PORTC.IN & 0x20) == 0)
+#define REN_IS_ASSERTED() ((PORTC.IN & 0x80) == 0)
+#define EOI_IS_ASSERTED() ((PORTC.IN & 0x01) == 0)
+#define IDY_IS_ASSERTED() ((PORTC.IN & 0x41) == 0)
 
-/** @brief Drive a command line (bit) to asserted or released.
- * @param line The line (bit) to drive. See ieee488_ctrl_line_t, 8..15.
- * @param asserted true to assert the line, false to release it.
- */
-inline void hal_drive_line(ieee488_ctrl_line_t line, bool asserted) {
-  uint8_t mask = line_to_mask(line);
-  if (asserted) {
-    PORTC.DIRSET = mask; // Drive LOW (asserted) via open-collector behavior.
-    PORTC.OUTCLR = mask;
-  } else {
-    PORTC.DIRCLR = mask; // Release line (Hi-Z), external/pull-up drives HIGH.
-  }
-}
+#define DAV_ASSERT() { PORTC.DIRSET = 0x02; PORTC.OUTCLR = 0x02; }
+#define NRFD_ASSERT() { PORTC.DIRSET = 0x04; PORTC.OUTCLR = 0x04; }
+#define NDAC_ASSERT() { PORTC.DIRSET = 0x08; PORTC.OUTCLR = 0x08; }
+#define ATN_ASSERT() { PORTC.DIRSET = 0x40; PORTC.OUTCLR = 0x40; }
+#define IFC_ASSERT() { PORTC.DIRSET = 0x10; PORTC.OUTCLR = 0x10; }
+#define SRQ_ASSERT() { PORTC.DIRSET = 0x20; PORTC.OUTCLR = 0x20; }
+#define REN_ASSERT() { PORTC.DIRSET = 0x80; PORTC.OUTCLR = 0x80; }
+#define EOI_ASSERT() { PORTC.DIRSET = 0x01; PORTC.OUTCLR = 0x01; }
+
+#define DAV_RELEASE() { PORTC.DIRCLR = 0x02; }
+#define NRFD_RELEASE() { PORTC.DIRCLR = 0x04; }
+#define NDAC_RELEASE() { PORTC.DIRCLR = 0x08; }
+#define ATN_RELEASE() { PORTC.DIRCLR = 0x40; }
+#define IFC_RELEASE() { PORTC.DIRCLR = 0x10; }
+#define SRQ_RELEASE() { PORTC.DIRCLR = 0x20; }
+#define REN_RELEASE() { PORTC.DIRCLR = 0x80; }
+#define EOI_RELEASE() { PORTC.DIRCLR = 0x01; }
 
 /** @brief Read the state of the digital I/O lines (DIO1-DIO8).
  * @return The logical state of the DIO lines, bit 0 = DIO1.

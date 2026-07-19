@@ -13,18 +13,32 @@
  ********************************************************************/
 
 static unsigned int tx_counter = 0;
+/** @brief Get the next byte for transmission.
+ * @param ctx The context pointer provided to ieee488_init().
+ * @param byte Pointer to a byte to be filled with the next byte to transmit.
+ * @param end Pointer to a boolean to be filled with true if this is the last byte of the message, false otherwise.
+ * @return true if a byte was provided, false if there are no more bytes to send.
+ */
 static bool device_tx(void* c, uint8_t* b, bool* end) {
     (void)c;
     static const char s[] = "READY\n";
-    if (tx_counter >= sizeof(s) - 1) return false;
+    if (tx_counter >= sizeof(s) - 1) {
+        // Let device_rx determine new data to send.
+        return false;
+    }
     *b = (uint8_t)s[tx_counter++];
     *end = tx_counter == sizeof(s) - 1;
-    if (*end) tx_counter = 0;
     return true;
 }
 
+/** @brief Handle a received byte.
+ * @param ctx The context pointer provided to ieee488_init().
+ * @param byte The received byte.
+ * @param end True if this is the last byte of the message, false otherwise.
+ */
 static void device_rx(void* c, uint8_t b, bool end) {
     (void)c;
+    tx_counter = 0; // allow new transmission to start after receiving a byte
     Serial.print("RX ");
     Serial.print(b, HEX);
     if (end) Serial.print(" END");
@@ -56,9 +70,16 @@ static uint8_t status_byte(void* c) {
 static void remote_changed(void* ctx, bool remote, bool lockout) {
     (void)ctx;
     (void)lockout;
-    digitalWrite(LED_R, remote ? LOW : HIGH);
-    // Serial.print(remote ? "remote" : "local");
-    // Serial.println(lockout ? " lockout" : "");
+    if (remote) {
+        digitalWrite(LED_R, LOW);
+        digitalWrite(LED_G, HIGH);
+    } else {
+        digitalWrite(LED_G, LOW);
+        digitalWrite(LED_R, HIGH);
+    }
+    Serial.print(remote ? "remote" : "local");
+    Serial.print(lockout ? " lockout" : "");
+    Serial.println();
 }
 
 /** @brief Handle a change in the addressed status.
@@ -129,26 +150,26 @@ static void command_seen(void* ctx, uint8_t command, bool before) {
     if (before) return;
     Serial.print("CMD: ");
     print_command(command);
-    // Serial.print(" SH: ");
-    // Serial.print(ieee488_device.sh, HEX);
-    // Serial.print(" AH: ");
-    // Serial.print(ieee488_device.ah, HEX);
-    // Serial.print(" T: ");
-    // Serial.print(ieee488_device.talker, HEX);
-    // Serial.print(" L: ");
-    // Serial.print(ieee488_device.listener, HEX);
-    // Serial.print(" SR: ");
-    // Serial.print(ieee488_device.sr, HEX);
-    // Serial.print(" RL: ");
-    // Serial.print(ieee488_device.rl, HEX);
-    // Serial.print(" PP: ");
-    // Serial.print(ieee488_device.pp, HEX);
-    // Serial.print(" SP: ");
-    // Serial.print(ieee488_device.serial_poll_mode ? "true" : "false");
-    // Serial.print(" TPA: ");
-    // Serial.print(ieee488_device.talk_primary_addressed ? "true" : "false");
-    // Serial.print(" LPA: ");
-    // Serial.print(ieee488_device.listen_primary_addressed ? "true" : "false");
+    Serial.print(" SH: ");
+    Serial.print(ieee488_device.sh, HEX);
+    Serial.print(" AH: ");
+    Serial.print(ieee488_device.ah, HEX);
+    Serial.print(" T: ");
+    Serial.print(ieee488_device.talker, HEX);
+    Serial.print(" L: ");
+    Serial.print(ieee488_device.listener, HEX);
+    Serial.print(" SR: ");
+    Serial.print(ieee488_device.sr, HEX);
+    Serial.print(" RL: ");
+    Serial.print(ieee488_device.rl, HEX);
+    Serial.print(" PP: ");
+    Serial.print(ieee488_device.pp, HEX);
+    Serial.print(" SP: ");
+    Serial.print(ieee488_device.serial_poll_mode ? "true" : "false");
+    Serial.print(" TPA: ");
+    Serial.print(ieee488_device.talk_primary_addressed ? "true" : "false");
+    Serial.print(" LPA: ");
+    Serial.print(ieee488_device.listen_primary_addressed ? "true" : "false");
     // Serial.print(" PPC: ");
     // Serial.print(ieee488_device.pp_config_addressed ? "true" : "false");
     // Serial.print(" PPCfg: ");
@@ -190,7 +211,7 @@ ieee488_callbacks_t cb = {
     device_trigger,  // device_trigger
     remote_changed,  // remote_changed,
     addressed_changed, // addressed_changed
-    0, // command_seen,    // command_seen
+    command_seen,    // command_seen
     0                // ctx
 };
 
@@ -221,6 +242,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Starting IEEE 488.1 device...");
     ieee488_init(&cfg, &cb);
+    
     Serial.print("The device is present on address ");
     Serial.println(cfg.primary_address);
 }

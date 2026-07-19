@@ -15,6 +15,11 @@ extern "C" {
 // but that would make the HAL more complex and slower, and it is 
 // not needed for the current use case.
 
+// The mechanism needed for syncing between the ISR and the main code is affected 
+// by 8 bit Arduino limitations: `#include <stdatomic.h>` is not supported (yet). 
+// Therefore, I use `volatile`, `#include <util/atomic.h>` and `ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { .... }`.
+// If you want to move to a better chain, you WILL want to use atomic variables.
+
 /* IEEE 488.1-1987, 1.4.3: sixteen signal lines. Logical true means asserted.
  * The HAL must implement wired-OR/open-collector semantics where required.
  */
@@ -157,6 +162,9 @@ typedef struct {
     void* ctx;
 } ieee488_callbacks_t;
 
+// Force the enums in 1 byte each, so that the need for atomic access is reduced. 
+// You may want to change that and use atomic access if you have a different architecture or compiler that does not guarantee atomic access to 1-byte variables.
+
 typedef enum { IEEE488_SH_SIDS,
                IEEE488_SH_SGNS,
                IEEE488_SH_SDYS,
@@ -197,13 +205,13 @@ typedef struct ieee488_device {
     ieee488_config_t cfg;    // Configuration for the device.
     ieee488_callbacks_t cb;  // Callbacks for the device.
 
-    ieee488_sh_state_t sh;       // Source Handshake (SH) state.
-    ieee488_ah_state_t ah;       // Acceptor Handshake (AH) state.
-    ieee488_t_state_t talker;    // Talker (T) state.
-    ieee488_l_state_t listener;  // Listener (L) state.
-    ieee488_sr_state_t sr;       // Service Request (SR) state.
-    ieee488_rl_state_t rl;       // Remote Local (RL) state.
-    ieee488_pp_state_t pp;       // Parallel Poll (PP) state.
+    volatile ieee488_sh_state_t sh;       // Source Handshake (SH) state.
+    volatile ieee488_ah_state_t ah;       // Acceptor Handshake (AH) state.
+    volatile ieee488_t_state_t talker;    // Talker (T) state.
+    volatile ieee488_l_state_t listener;  // Listener (L) state.
+    volatile ieee488_sr_state_t sr;       // Service Request (SR) state.
+    volatile ieee488_rl_state_t rl;       // Remote Local (RL) state.
+    volatile ieee488_pp_state_t pp;       // Parallel Poll (PP) state.
 
     bool serial_poll_mode;             // true if the device is in serial poll mode, false otherwise.
     bool talk_primary_addressed;       // true if the device is addressed as a talker, false otherwise.
@@ -219,7 +227,8 @@ typedef struct ieee488_device {
     uint8_t tx_byte;                              // the byte loaded for transmission.
     uint32_t deadline;                            // the time by which the current operation must complete, in microseconds.
     uint32_t state_since;                         // the time since the last state change, in microseconds.
-    bool last_ifc, last_atn, last_dav, last_eoi, last_idy;  // the last states of the interface signals.
+    volatile uint8_t last_atn, last_eoi, last_idy, last_ren;  // the last states of the interface signals.
+    volatile uint8_t restart_loop;  // true if the main loop should be restarted, false otherwise.
 } ieee488_device_t;
 
 extern ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance.
@@ -287,10 +296,17 @@ bool ieee488_is_remote(void);
 
 /** @brief Handle an ATN interrupt.
  *
- * This interrupt handler should be called when either the ATN or EOI lines change state.
+ * This interrupt handler should be called when ATN changes state.
  * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
  */
-void ieee488_handle_atn_interrupt(void);
+extern inline void ieee488_handle_atn_interrupt(void);
+
+/** @brief Handle an IDY (ATN && EOI) interrupt.
+ *
+ * This interrupt handler should be called when (ATN && EOI) change state.
+ * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
+ */
+extern inline void ieee488_handle_idy_interrupt(void);
 
 #ifdef __cplusplus
 }
