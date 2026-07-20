@@ -165,38 +165,38 @@ typedef struct {
 // Force the enums in 1 byte each, so that the need for atomic access is reduced.
 // You may want to change that and use atomic access if you have a different architecture or compiler that does not guarantee atomic access to 1-byte variables.
 
-typedef enum { IEEE488_SH_SIDS,
+typedef enum __attribute__((packed)) { IEEE488_SH_SIDS,
                IEEE488_SH_SGNS,
                IEEE488_SH_SDYS,
                IEEE488_SH_STRS,
                IEEE488_SH_SWNS,
                IEEE488_SH_SIWS } ieee488_sh_state_t; /** SH (Source Handshake) states */
 
-typedef enum { IEEE488_AH_AIDS,
+typedef enum __attribute__((packed)) { IEEE488_AH_AIDS,
                IEEE488_AH_ANRS,
                IEEE488_AH_ACRS,
                IEEE488_AH_ACDS,
                IEEE488_AH_AWNS } ieee488_ah_state_t; /** AH (Acceptor Handshake) states */
 
-typedef enum { IEEE488_T_TIDS,
+typedef enum __attribute__((packed)) { IEEE488_T_TIDS,
                IEEE488_T_TADS,
                IEEE488_T_TACS,
                IEEE488_T_SPAS } ieee488_t_state_t; /** T (Talker) states */
 
-typedef enum { IEEE488_L_LIDS,
+typedef enum __attribute__((packed)) { IEEE488_L_LIDS,
                IEEE488_L_LADS,
                IEEE488_L_LACS } ieee488_l_state_t; /** L (Listener) states */
 
-typedef enum { IEEE488_SR_NPRS,
+typedef enum __attribute__((packed)) { IEEE488_SR_NPRS,
                IEEE488_SR_SQRS,
                IEEE488_SR_APRS } ieee488_sr_state_t; /** SR (Service Request) states */
 
-typedef enum { IEEE488_RL_LOCS,
+typedef enum __attribute__((packed)) { IEEE488_RL_LOCS,
                IEEE488_RL_LWLS,
                IEEE488_RL_REMS,
                IEEE488_RL_RWLS } ieee488_rl_state_t; /** RL (Remote Local) states */
 
-typedef enum { IEEE488_PP_PPIS,
+typedef enum __attribute__((packed)) { IEEE488_PP_PPIS,
                IEEE488_PP_PPSS,
                IEEE488_PP_PPAS } ieee488_pp_state_t; /** PP (Parallel Poll) states */
 
