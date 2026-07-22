@@ -245,6 +245,10 @@ void setup() {
     
     Serial.print("The device is present on address ");
     Serial.println(cfg.primary_address);
+
+    Serial.println("Set parallel poll to local with line 2 enabled, and sense true.");
+    ieee488_set_parallel_poll_local(true,2, true);
+    ieee488_set_individual_status(true);
 }
 
 void loop() {

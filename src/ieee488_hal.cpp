@@ -16,9 +16,6 @@ ISR(PORTC_PORT_vect) {
 }
 #endif  // ATN_INTR_HANDLER
 
-// TODO add CCL for EOI + ATN if needed, but for now, we focus on ATN.
-
-
 /** @brief Initialize the HAL.
  * @return true if initialization was successful, false otherwise.
  */
@@ -48,6 +45,7 @@ bool hal_init(void) {
 #ifdef ATN_INTR_HANDLER
   PORTC.PIN6CTRL |= PORT_ISC_BOTHEDGES_gc; // Enable interrupt on both edges for ATN (PC6)
 #endif
+
   return true;
 
 }

@@ -227,7 +227,7 @@ typedef struct ieee488_device {
     uint8_t tx_byte;                                          // the byte loaded for transmission.
     uint32_t deadline;                                        // the time by which the current operation must complete, in microseconds.
     uint32_t state_since;                                     // the time since the last state change, in microseconds.
-    volatile uint8_t last_atn, last_eoi, last_idy, last_ren;  // the last states of the interface signals.
+    volatile uint8_t last_atn, last_eoi, last_ren;  // the last states of the interface signals.
     bool last_addressed;                                      // true if the device was last addressed, false otherwise.
     volatile uint8_t restart_loop;                            // true if the main loop should be restarted, false otherwise.
 } ieee488_device_t;

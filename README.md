@@ -19,16 +19,15 @@ Working:
 - trigger
 - remote/local
 - clear
+- ppoll
 
 Not compliant:
 
-- timing on an AT4809. The fastest I can get is 650ns for t2, while it should be 200ns. But none of my gateways have problems with it.
+- timing on an AT4809. The fastest I can get is 650ns for t2 or t5, while it should be 200ns. But none of my gateways have problems with it. The 'atomic blocks' in place now seriously aggravate the timing problems (650ns became 5us). I must move to atomic vars only.
 
 TODO:
 
-- collaboration between interrupt handler and the regular poller in the `acceptor()` and `source()` functions.
 - allow more than 1 address to be adressed
-- parallel poll
 
 ## Supported functions/capabilities
 

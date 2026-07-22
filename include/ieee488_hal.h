@@ -10,10 +10,8 @@ extern "C" {
 
 // Determine if the ATN line is being handled in an interrupt context.
 // This can be used to achieve the timing constraints around ATN changes if the entire loop takes too much time.
+// It will also handle the time sensitive handling of IDY (ATN ^ EOI). This will fail if EOI is not asserted at the same time as ATN.
 #define ATN_INTR_HANDLER
-// Determine if the IDY state (ATN && EOI) line is being handled in an interrupt context.
-// This can be used to achieve the timing constraints around IDY changes if the entire loop takes too much time.
-// #define IDY_INTR_HANDLER
 
 // When the pins are physically LOW, they are true (asserted) in the IEEE 488.1-1987 standard. 
 // When the pins are physically HIGH, they are false (released) in the standard. 
