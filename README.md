@@ -23,7 +23,7 @@ Working:
 
 Not compliant:
 
-- timing on an AT4809. The fastest I can get is 650ns for t2 or t5, while it should be 200ns. But none of my gateways have problems with it. The 'atomic blocks' in place now seriously aggravate the timing problems (650ns became 5us). I must move to atomic vars only.
+- timing on an AT4809. The fastest I can get is about 4us for t2 or t5, while it should be 200ns. But none of my gateways have problems with it. A faster CPU, or elaborated CCL, is likely required. With some effort (VPORT) I might gain 1us, but first tests show it's not easy with pullups.
 
 TODO:
 
@@ -75,9 +75,15 @@ IEEE-488 uses negative-true signalling and wired-OR behavior. The HAL uses **log
 2. Set primary/secondary addresses and timing in `ieee488_config_t`.
 3. Implement callbacks for device-dependent data and actions.
 
-The polling implementation is non-blocking. For high transfer rates, use threading and/or GPIO edge interrupts, or translate the same FSM into an FPGA/peripheral implementation.
+The polling implementation is non-blocking, and the code in the loop MUST be non-blocking. For high transfer rates, or stricter timing requirements, use one or more of the following:
 
-A basic interrupt mechanism is in place on ATN and IDY (ATN ^ EOI).
+- fast CPU
+- threading
+- GPIO edge interrupts
+- translate the same FSM into an FPGA/peripheral implementation
+
+A basic interrupt mechanism is in place on ATN.
+It assumes that on parallel polling, the EOI line is asserted at the same time as the ATN line. Which may not be the case everywhere....
 
 The mechanism needed for syncing between the ISR and the main code is affected by 8 bit Arduino limitations: `#include <stdatomic.h>` is not supported (yet). Therefore, I use `volatile`, `#include <util/atomic.h>` and `ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { .... }`.
 

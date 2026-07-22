@@ -53,22 +53,10 @@ extern "C" {
 // REN_RELEASE()
 // EOI_RELEASE()
 
+// READ_DIO() // read the DIO lines, return a byte with bit 0 = DIO1, bit 1 = DIO2, ..., bit 7 = DIO8
+// DRIVE_DIO(value, enable) // drive the DIO lines with the given value (bit 0 = DIO1, bit 1 = DIO2, ..., bit 7 = DIO8) if enable is true, otherwise release the lines
 
-/** @brief Read the state of the digital I/O lines (DIO1-DIO8).
- * @return The logical state of the DIO lines, bit 0 = DIO1.
- */
-uint8_t hal_read_dio(void);
-
-/** @brief Drive the digital I/O lines (DIO1-DIO8).
- * @param value The logical state to drive onto the DIO lines, bit 0 = DIO1.
- * @param enable true to drive the lines, false to release them.
- */
-void hal_drive_dio(uint8_t value, bool enable);
-
-/** @brief Get the time in microseconds since startup.
- * @return Time in microseconds since startup.
- */
-uint32_t hal_time_us(void);
+// TIME_US()  // Return the time in microseconds since startup. This is used for timing constraints in the IEEE 488.1-1987 standard.
 
 /** @brief Initialize the HAL.
  * @return true if initialization was successful, false otherwise.
