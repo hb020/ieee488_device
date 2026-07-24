@@ -35,8 +35,7 @@ TODO:
 
 - check how extended address should work:
   - 'find': x,0 is found, but not the others
-  - 'readstb': ditto
-  - read/write/clear/local/remote/trigger work, and they do not react to other secondary addresses
+  - read/write/clear/local/remote/trigger/readstb work, and they do not react to other secondary addresses
 
 ## Supported functions/capabilities
 

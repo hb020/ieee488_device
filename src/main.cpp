@@ -6,6 +6,7 @@
 #define LED_R 13
 #define LED_G 39
 #define LED_B 38
+bool debug_output = false;
 
 /********************************************************************
  * Callbacks. They must be non-blocking; any blocking operations should
@@ -77,9 +78,11 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
         digitalWrite(LED_G, LOW);
         digitalWrite(LED_R, HIGH);
     }
-    // Serial.print(remote ? "remote" : "local");
-    // Serial.print(lockout ? " lockout" : "");
-    // Serial.println();
+    if (debug_output) {
+        Serial.print(remote ? "Remote" : "Local");
+        Serial.print(lockout ? " lockout" : "");
+        Serial.println();
+    }
 }
 
 /** @brief Handle a change in the addressed status.
@@ -89,6 +92,10 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
 static void addressed_changed(void* ctx, bool addressed) {
     (void)ctx;
     digitalWrite(LED_B, addressed ? LOW : HIGH);
+    if (debug_output) {
+        Serial.print(addressed ? "Addressed" : "Unaddressed");
+        Serial.println();
+    }
 }
 
 static void print_nr(uint8_t b) {
@@ -235,8 +242,8 @@ ieee488_callbacks_t cb = {
     device_clear,    // device_clear
     device_trigger,  // device_trigger
     remote_changed,  // remote_changed,
-    0, // addressed_changed, // addressed_changed
-    0, // command_seen,    // command_seen
+    addressed_changed, // addressed_changed
+    command_seen,    // command_seen
     0                // ctx
 };
 
@@ -290,6 +297,8 @@ void showConfig(void) {
     } else {
         Serial.println(cfg.pp_line);
     }
+    Serial.print("- Debug output: ");
+    Serial.println(debug_output ? "enabled" : "disabled");
 }
 
 /********************************************************************
@@ -333,6 +342,7 @@ void printMenu(void) {
     Serial.println("3. Set T3 timeout (us)");
     Serial.println("1. Set T1 delay (us)");
     Serial.println("p. Set PP line (1-8, 0 to disable)");
+    Serial.println("d. Toggle debug output");
     Serial.println("q. Activate and run the device");
 }
 
@@ -466,6 +476,12 @@ bool handleSerialConfig(void) {
                 Serial.println("No input received");
             }
             break;
+
+        case 'd':
+            debug_output = !debug_output;
+            Serial.print("Debug output ");
+            Serial.println(debug_output ? "enabled" : "disabled");
+            break;
             
         case 'c':
             showConfig();
@@ -519,6 +535,10 @@ void loop() {
         if (handleSerialConfig()) {
             device_active = true;
             showConfig();
+            if (!debug_output) {
+                cb.addressed_changed = 0;
+                cb.command_seen = 0;
+            }
             ieee488_init(&cfg, &cb);
             if (cfg.pp_line >= 1 && cfg.pp_line <= 8) {
                 ieee488_set_parallel_poll_local(true, cfg.pp_line, true);
