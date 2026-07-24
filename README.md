@@ -24,15 +24,19 @@ Working:
 
 Not compliant:
 
-- timing on an AT4809.
+- timing on an ATmega4809.
   - The fastest I can get is about 3us for t2 or t5, while it should be 200ns.
-  - None of my gateways have problems with it, PROVIDED there are no other devices on the bus. Then things break: others will have finished the handshake before I can even start it. Hence: I'm likely to be missing commands.
+  - None of my gateways have problems with it, PROVIDED there are no other devices on the bus.
+  - When other devices are on the bus, things break: others will have finished the handshake before I can even start it. Hence: I'm missing commands.
   - A faster CPU, or elaborated CCL, is required.
-  - Interrupt handling on DAV (fetching commands) may be a possible patch against missing commands, but it is unlikely, since I'd need below 1 us handling.
+  - Interrupt handling on DAV (fetching commands) might be a possible protection against missing commands, but it is unlikely to succeed, since I'd need below 1 us handling.
 
 TODO:
 
-- check how extended address 'find' should work: x,0 is found, but not the others
+- check how extended address should work:
+  - 'find': x,0 is found, but not the others
+  - 'readstb': ditto
+  - read/write/clear/local/remote/trigger work, and they do not react to other secondary addresses
 
 ## Supported functions/capabilities
 
