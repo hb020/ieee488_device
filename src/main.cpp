@@ -84,23 +84,11 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
 
 /** @brief Handle a change in the addressed status.
  * @param ctx The context pointer provided to ieee488_init().
- * @param primary_address The primary address of the device that was addressed.
- * @param secondary_address The secondary address of the device that was addressed.
  * @param addressed True if the device is now addressed, false otherwise.
  */
-static void addressed_changed(void* ctx, uint8_t primary_address,
-                            uint8_t secondary_address, bool addressed) {
+static void addressed_changed(void* ctx, bool addressed) {
     (void)ctx;
-    (void)primary_address;
-    (void)secondary_address;
     digitalWrite(LED_B, addressed ? LOW : HIGH);
-
-    // Serial.print("Addressed: ");
-    // Serial.print(primary_address, DEC);
-    // Serial.print(",");
-    // Serial.print(secondary_address, DEC);
-    // Serial.print(addressed ? " addressed" : " not addressed");
-    // Serial.println();
 }
 
 static void print_nr(uint8_t b) {
@@ -253,21 +241,263 @@ ieee488_callbacks_t cb = {
 };
 
 /********************************************************************
- * The main program
+ * Config handling
  ********************************************************************/
 
 ieee488_config_t cfg = {
     5,                    // primary address
     0,                    // secondary address
-    IEEE488_ADDR_NORMAL,  // address mode
+    false,                // extended address
     false,                // talk only
     false,                // listen only
     true,                 // use EOI
     '\n',                 // EOS byte
     false,                // EOS enabled
     1000,                 // T3 handshake timeout us, 0 is indefinite
-    10                    // T1 delay us
+    10,                   // T1 delay us
+    0                     // pp_line
 };
+
+/********************************************************************
+ * Menu system
+ ********************************************************************/
+
+void showConfig(void) {
+    Serial.println("\n=== Configuration ===");
+    Serial.print("- Address: ");
+    Serial.print(cfg.primary_address);
+    if (cfg.extended_address) {
+        Serial.print(",");
+        Serial.print(cfg.secondary_address);
+    }
+    Serial.println();
+    Serial.print("- EOI: ");
+    Serial.println(cfg.use_eoi ? "enabled" : "disabled");
+    Serial.print("- EOS: ");
+    if (cfg.eos_enabled) {
+        Serial.print("0x");
+        Serial.println(cfg.eos_byte, HEX);
+    } else {
+        Serial.println("disabled");
+    }
+    Serial.print("- T3 Timeout (us): ");
+    Serial.println(cfg.handshake_timeout_us);
+    Serial.print("- T1 Delay (us): ");
+    Serial.println(cfg.t1_delay_us);
+    Serial.print("- PP Line: ");
+    if (cfg.pp_line < 1 || cfg.pp_line > 8) {
+        Serial.println("not configured");
+    } else {
+        Serial.println(cfg.pp_line);
+    }
+}
+
+/********************************************************************
+ * Configuration menu
+ ********************************************************************/
+
+ void strip(char* s) {
+    size_t len = strlen(s);
+    while (len > 0 && (isspace((unsigned char)s[len - 1]))) {
+        s[len - 1] = '\0';
+        len--;
+    }
+}
+
+// read a line from Serial into buf, up to max_len-1 characters, null-terminated. 
+// Returns the length of the stripped string read (excluding null terminator).
+size_t readLine(char* buf, size_t max_len) {
+    size_t len = 0;
+    while (len < max_len - 1) {
+        if (!Serial.available()) continue;
+        char c = Serial.read();
+        buf[len++] = c;
+        Serial.print(c);  // Echo back the typed character
+        if (c == '\n') break;
+    }
+    buf[len] = '\0';
+    strip(buf);  // Remove trailing whitespace
+    return strlen(buf);
+}
+
+void showPrompt(void) {
+    Serial.print("\nEnter option (? for menu): ");
+}
+
+void printMenu(void) {
+    Serial.println("\n=== IEEE 488 Device Configuration Menu ===");
+    Serial.println("c. Show configuration");
+    Serial.println("a. Set address (0-30[,0-30])");
+    Serial.println("e. Toggle EOI");
+    Serial.println("s. Set EOS byte (hex)");
+    Serial.println("3. Set T3 timeout (us)");
+    Serial.println("1. Set T1 delay (us)");
+    Serial.println("p. Set PP line (1-8, 0 to disable)");
+    Serial.println("q. Activate and run the device");
+}
+
+// Run a simple menu, returns true if the device should be activated and run, false otherwise.
+bool handleSerialConfig(void) {
+    if (!Serial.available()) return false;
+    
+    char cmd = Serial.read();
+    if (cmd == '\n' || cmd == '\r') return false; // Ignore newlines
+    Serial.println(cmd);
+    
+    uint32_t value = 0;
+    char buf[32];
+    size_t len = 0;
+    memset(buf, 0, sizeof(buf));
+    
+    switch (cmd) {
+        case 'a':
+            Serial.print("Enter primary address (0-30): ");
+            len = readLine(buf, sizeof(buf));
+            if (len > 0) {
+                value = atoi(buf);
+                if (value <= 30) {
+                    cfg.primary_address = value;
+                    Serial.print("Primary address set to ");
+                    Serial.println(value);
+                } else {
+                    Serial.println("Invalid address (0-30)");
+                    Serial.print(value, DEC);
+                    Serial.println(" is not a valid primary address");
+                    break;
+                }
+            } else {
+                Serial.println("No input received");
+                break;
+            }
+
+            Serial.print("Enter secondary address (0-30 or empty for none): ");
+            len = readLine(buf, sizeof(buf));
+            if (len == 0) {
+                cfg.secondary_address = 0;
+                cfg.extended_address = false;
+                Serial.println("Secondary address cleared");
+                break;
+            }
+            value = atoi(buf);
+            if (value <= 30) {
+                cfg.secondary_address = value;
+                cfg.extended_address = true;
+                Serial.print("Secondary address set to ");
+                Serial.println(value);
+            } else {
+                Serial.println("Invalid secondary address (0-30)");
+            }
+            break;
+                        
+        case 'e':
+            cfg.use_eoi = !cfg.use_eoi;
+            Serial.print("EOI ");
+            Serial.println(cfg.use_eoi ? "enabled" : "disabled");
+            break;
+            
+        case 's':
+            Serial.print("Enter EOS byte (hex 00-FF or empty for none): ");
+            len = readLine(buf, sizeof(buf));
+            if (len == 0) {
+                cfg.eos_enabled = false;
+                Serial.println("EOS byte cleared");
+                break;
+            }
+            value = (uint32_t)strtol(buf, NULL, 16);
+            if (value <= 0xFF) {
+                cfg.eos_byte = (uint8_t)value;
+                cfg.eos_enabled = true;
+                Serial.print("EOS byte set to 0x");
+                Serial.println(cfg.eos_byte, HEX);
+            } else {
+                Serial.println("Invalid byte value");
+            }
+            break;
+                        
+        case '3':
+            Serial.print("Enter T3 timeout (us): ");
+            len = readLine(buf, sizeof(buf));
+            if (len >  0) {            
+                value = atoi(buf);
+                cfg.handshake_timeout_us = value;
+                Serial.print("T3 timeout set to ");
+                Serial.print(value);
+                Serial.println(" us");
+            } else {
+                Serial.println("No input received");
+            }
+            break;
+            
+        case '1':
+            Serial.print("Enter T1 delay (us): ");
+            len = readLine(buf, sizeof(buf));
+            if (len >  0) {            
+                value = atoi(buf);
+                cfg.t1_delay_us = value;
+                Serial.print("T1 delay set to ");
+                Serial.print(value);
+                Serial.println(" us");
+            } else {
+                Serial.println("No input received");
+            }
+            break;
+            
+        case 'p':
+            Serial.print("Enter PP line (1-8, 0 to disable): ");
+            len = readLine(buf, sizeof(buf));
+            if (len >  0) {            
+                value = atoi(buf);
+                if (value == 0 || (value >= 1 && value <= 8)) {
+                    cfg.pp_line = value;
+                    if (cfg.pp_line >= 1 && cfg.pp_line <= 8) {
+                        ieee488_set_parallel_poll_local(true, cfg.pp_line, true);
+                        ieee488_set_individual_status(true);
+                        Serial.print("PP line set to ");
+                        Serial.println(value);
+                    } else {
+                        ieee488_set_parallel_poll_local(false, 0, false);
+                        ieee488_set_individual_status(false);
+                        Serial.println("Parallel poll disabled");
+                    }
+                } else {
+                    Serial.println("Invalid PP line (0, 1-8)");
+                }
+            } else {
+                Serial.println("No input received");
+            }
+            break;
+            
+        case 'c':
+            showConfig();
+            break;
+            
+        case 'h':
+        case '?':
+            printMenu();
+            break;
+
+        case 'q':
+            return true; // Activate and run the device
+            
+        case '\t':
+        case '\n':
+        case '\r':
+            return false; // Ignore whitespace
+
+        default:
+            Serial.print("Unknown option '");
+            Serial.print(cmd);
+            Serial.println("'");
+            break;
+    }
+    showPrompt();
+    return false;
+}
+
+/********************************************************************
+ * The main program
+ ********************************************************************/
+bool device_active = false;
 
 void setup() {
     pinMode(LED_R, OUTPUT);
@@ -277,17 +507,30 @@ void setup() {
     digitalWrite(LED_G, LOW);
     digitalWrite(LED_B, HIGH);
     Serial.begin(115200);
-    Serial.println("Starting IEEE 488.1 device...");
-    ieee488_init(&cfg, &cb);
-    
-    Serial.print("The device is present on address ");
-    Serial.println(cfg.primary_address);
-
-    Serial.println("Set parallel poll to local with line 2 enabled, and sense true.");
-    ieee488_set_parallel_poll_local(true,2, true);
-    ieee488_set_individual_status(true);
+    Serial.println("IEEE-488 Device");
+    showConfig();
+    Serial.setTimeout(10000);
+    printMenu();
+    showPrompt();
 }
 
 void loop() {
-    ieee488_poll();
+    if (!device_active) {
+        if (handleSerialConfig()) {
+            device_active = true;
+            showConfig();
+            ieee488_init(&cfg, &cb);
+            if (cfg.pp_line >= 1 && cfg.pp_line <= 8) {
+                ieee488_set_parallel_poll_local(true, cfg.pp_line, true);
+                ieee488_set_individual_status(true);
+            } else {
+                ieee488_set_parallel_poll_local(false, 0, false);
+                ieee488_set_individual_status(false);
+            }        
+            Serial.println("Starting the IEEE-488 Device...");
+            Serial.println("Device is now active. Press reset to reconfigure.");
+        }
+    } else {
+        ieee488_poll();
+    }
 }

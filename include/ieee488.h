@@ -75,14 +75,12 @@ typedef enum { IEEE488_OK = 0,
                IEEE488_ETIMEOUT = -3,
                IEEE488_EOVERFLOW = -4 } ieee488_result_t;
 
-typedef enum { IEEE488_ADDR_NORMAL,
-               IEEE488_ADDR_EXTENDED } ieee488_address_mode_t;
 
 /** @brief Configuration for an IEEE 488.1-1987 device. */
 typedef struct {
     uint8_t primary_address;              // 0..30; 31 is UNL/UNT
     uint8_t secondary_address;            // 0..31, used in extended mode
-    ieee488_address_mode_t address_mode;  // IEEE 488.1 address mode (normal or extended)
+    bool extended_address;                // true if using extended addressing, false for normal addressing
     bool talk_only;                       // local ton message, 2.5.5
     bool listen_only;                     // local lon message, 2.6.5
     bool use_eoi;                         // EOI line is used to indicate the end of a message (true) or not (false)
@@ -90,6 +88,7 @@ typedef struct {
     bool eos_enabled;                     // True if EOS byte is enabled, false otherwise.
     uint32_t handshake_timeout_us;        // T3 handshake timeout us, 0 = no software timeout
     uint32_t t1_delay_us;                 // T1 source settling delay; see 2.3 and 3.8
+    uint8_t pp_line;                      // The DIO line to use for parallel poll local (1-8). 0 for 'not configured'.
 } ieee488_config_t;
 
 /** @brief Callbacks for an IEEE 488.1-1987 device.
@@ -142,12 +141,9 @@ typedef struct {
 
     /** @brief Handle a change in the addressed status.
      * @param ctx The context pointer provided to ieee488_init().
-     * @param primary_address The primary address of the device that was addressed.
-     * @param secondary_address The secondary address of the device that was addressed.
      * @param addressed True if the device is now addressed, false otherwise.
      */
-    void (*addressed_changed)(void* ctx, uint8_t primary_address,
-                              uint8_t secondary_address, bool addressed);
+    void (*addressed_changed)(void* ctx, bool addressed);
 
     /** @brief Handle a command seen on the bus.
      *

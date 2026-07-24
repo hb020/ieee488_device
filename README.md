@@ -20,6 +20,7 @@ Working:
 - trigger
 - remote/local
 - clear
+- basic config menu
 
 Not compliant:
 
@@ -31,7 +32,7 @@ Not compliant:
 
 TODO:
 
-- allow more than 1 address to be adressed
+- check how extended address 'find' should work: x,0 is found, but not the others
 
 ## Supported functions/capabilities
 

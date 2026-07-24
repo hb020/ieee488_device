@@ -79,8 +79,8 @@ static __attribute__((always_inline)) void decode_command(uint8_t b) {
 
     /* T/TE, clauses 2.5.3.1-.8. */
     if (b == IEEE488_CMD_UNT || ((b & 0x60u) == 0x40u && !mta(b)) || mla(b)) ieee488_device.talker = IEEE488_T_TIDS;
-    if (ieee488_device.cfg.address_mode == IEEE488_ADDR_NORMAL && mta(b)) ieee488_device.talker = IEEE488_T_TADS;
-    if (ieee488_device.cfg.address_mode == IEEE488_ADDR_EXTENDED) {
+    if (!ieee488_device.cfg.extended_address && mta(b)) ieee488_device.talker = IEEE488_T_TADS;
+    if (ieee488_device.cfg.extended_address) {
         if (mta(b))
             ieee488_device.talk_primary_addressed = true;
         else if (pcg(b))
@@ -104,8 +104,8 @@ static __attribute__((always_inline)) void decode_command(uint8_t b) {
         ieee488_device.listener = IEEE488_L_LIDS;
         ieee488_device.listen_primary_addressed = false;
     }
-    if (ieee488_device.cfg.address_mode == IEEE488_ADDR_NORMAL && mla(b)) ieee488_device.listener = IEEE488_L_LADS;
-    if (ieee488_device.cfg.address_mode == IEEE488_ADDR_EXTENDED) {
+    if (!ieee488_device.cfg.extended_address && mla(b)) ieee488_device.listener = IEEE488_L_LADS;
+    if (ieee488_device.cfg.extended_address) {
         if (mla(b))
             ieee488_device.listen_primary_addressed = true;
         else if (pcg(b))
@@ -213,7 +213,7 @@ void ieee488_reset(bool from_power_on) {
     if (notify_remote_local && ieee488_device.cb.remote_changed)
         ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, false, false);
     if (notify_addressed_changed && ieee488_device.cb.addressed_changed)
-        ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, 0, 0, false);
+        ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, false);
 }
 
 /** @brief Initialize the IEEE 488 device with the given HAL, configuration, and callbacks.
@@ -739,7 +739,7 @@ void ieee488_poll(void) {
         }
         if (addressed != ieee488_device.last_addressed) {
             ieee488_device.last_addressed = addressed;
-            ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, 0, 0, addressed);
+            ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, addressed);
         }
     }
 }
