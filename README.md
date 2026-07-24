@@ -23,10 +23,15 @@ Working:
 
 Not compliant:
 
-- timing on an AT4809. The fastest I can get is about 4us for t2 or t5, while it should be 200ns. But none of my gateways have problems with it. A faster CPU, or elaborated CCL, is likely required. With some effort (VPORT) I might gain 1us, but first tests show it's not easy with pullups.
+- timing on an AT4809.
+  - The fastest I can get is about 3us for t2 or t5, while it should be 200ns.
+  - But none of my gateways have problems with it, PROVIDED there are no other devices on the bus. Once there are more devices, I start missing commands, most visibly on serial poll (I miss the `UNL`).
+  - A faster CPU, or elaborated CCL, is likely required.
+  - Interrupt handling on DAV (fetching commands) is a possible patch against missing commands.
 
 TODO:
 
+- DAV interrupt handling
 - allow more than 1 address to be adressed
 
 ## Supported functions/capabilities
@@ -80,14 +85,14 @@ The polling implementation is non-blocking, and the code in the loop MUST be non
 - fast CPU
 - threading
 - GPIO edge interrupts
-- translate the same FSM into an FPGA/peripheral implementation
+- translate the FSM into an FPGA/peripheral implementation
 
 A basic interrupt mechanism is in place on ATN.
 It assumes that on parallel polling, the EOI line is asserted at the same time as the ATN line. Which may not be the case everywhere....
 
 The mechanism needed for syncing between the ISR and the main code is affected by 8 bit Arduino limitations: `#include <stdatomic.h>` is not supported (yet). Therefore, I use `volatile`, `#include <util/atomic.h>` and `ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { .... }`.
 
-If you want to move to a better chain, you WILL want to use atomic variables.
+If you want to move to a better chain, you WILL want to use 'real' atomic variables.
 
 ## Important conformance notes
 

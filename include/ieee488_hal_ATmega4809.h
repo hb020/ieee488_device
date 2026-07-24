@@ -35,7 +35,45 @@ extern "C" {
 // This is not a controller, so I can use all open collector lines
 
 // Preprocessor definitions for handling the pins, because functions are too slow
+#define USE_VPORTS
+#ifdef USE_VPORTS
+#define DAV_IS_ASSERTED() ((VPORTC.IN & 0x02) == 0)
+#define NRFD_IS_ASSERTED() ((VPORTC.IN & 0x04) == 0)
+#define NDAC_IS_ASSERTED() ((VPORTC.IN & 0x08) == 0)
+#define ATN_IS_ASSERTED() ((VPORTC.IN & 0x40) == 0)
+#define IFC_IS_ASSERTED() ((VPORTC.IN & 0x10) == 0)
+#define SRQ_IS_ASSERTED() ((VPORTC.IN & 0x20) == 0)
+#define REN_IS_ASSERTED() ((VPORTC.IN & 0x80) == 0)
+#define EOI_IS_ASSERTED() ((VPORTC.IN & 0x01) == 0)
+#define IDY_IS_ASSERTED() ((VPORTC.IN & 0x41) == 0)
 
+// Assert: Set the pin to output. It will be driven low (see init)
+#define DAV_ASSERT() { VPORTC.DIR |= 0x02; }
+#define NRFD_ASSERT() { VPORTC.DIR |= 0x04; }
+#define NDAC_ASSERT() { VPORTC.DIR |= 0x08; }
+#define ATN_ASSERT() { VPORTC.DIR |= 0x40; }
+#define IFC_ASSERT() { VPORTC.DIR |= 0x10; }
+#define SRQ_ASSERT() { VPORTC.DIR |= 0x20; }
+#define REN_ASSERT() { VPORTC.DIR |= 0x80; }
+#define EOI_ASSERT() { VPORTC.DIR |= 0x01; }
+
+// Release: Set the pin to input_pullup, so it is not driven low
+#define DAV_RELEASE() { VPORTC.DIR &= ~0x02; }
+#define NRFD_RELEASE() { VPORTC.DIR &= ~0x04; }
+#define NDAC_RELEASE() { VPORTC.DIR &= ~0x08; }
+#define ATN_RELEASE() { VPORTC.DIR &= ~0x40; }
+#define IFC_RELEASE() { VPORTC.DIR &= ~0x10; }
+#define SRQ_RELEASE() { VPORTC.DIR &= ~0x20; }
+#define REN_RELEASE() { VPORTC.DIR &= ~0x80; }
+#define EOI_RELEASE() { VPORTC.DIR &= ~0x01; }
+
+#define READ_DIO() (~VPORTD.IN)
+
+// Writing is hard, VPORT would not be fast, as I need to set a mask and then write the value, so I will use PORTD.OUT directly. 
+// The speed is not critical, as the data lines are only used for talk/listen, and not for handshaking.
+#define DRIVE_DIO(value, enable) { if (enable) { PORTD.OUT = ~value; PORTD.DIRSET = 0xFF; } else { PORTD.DIRCLR = 0xFF; } }
+
+#else
 #define DAV_IS_ASSERTED() ((PORTC.IN & 0x02) == 0)
 #define NRFD_IS_ASSERTED() ((PORTC.IN & 0x04) == 0)
 #define NDAC_IS_ASSERTED() ((PORTC.IN & 0x08) == 0)
@@ -67,6 +105,7 @@ extern "C" {
 #define READ_DIO() (~PORTD.IN)
 
 #define DRIVE_DIO(value, enable) { if (enable) { PORTD.OUT = ~value; PORTD.DIRSET = 0xFF; } else { PORTD.DIRCLR = 0xFF; } }
+#endif
 
 #define TIME_US() (micros())
 

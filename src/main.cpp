@@ -103,6 +103,41 @@ static void addressed_changed(void* ctx, uint8_t primary_address,
     // Serial.println();
 }
 
+static void print_nr(uint8_t b) {
+    b = b & 0x1fu;
+    if (b == 0) Serial.print("00");
+    else if (b == 1) Serial.print("01");
+    else if (b == 2) Serial.print("02");
+    else if (b == 3) Serial.print("03");
+    else if (b == 4) Serial.print("04");
+    else if (b == 5) Serial.print("05");
+    else if (b == 6) Serial.print("06");
+    else if (b == 7) Serial.print("07");
+    else if (b == 8) Serial.print("08");
+    else if (b == 9) Serial.print("09");
+    else if (b == 10) Serial.print("10");
+    else if (b == 11) Serial.print("11");
+    else if (b == 12) Serial.print("12");
+    else if (b == 13) Serial.print("13");
+    else if (b == 14) Serial.print("14");
+    else if (b == 15) Serial.print("15");
+    else if (b == 16) Serial.print("16");
+    else if (b == 17) Serial.print("17");
+    else if (b == 18) Serial.print("18");
+    else if (b == 19) Serial.print("19");
+    else if (b == 20) Serial.print("20");
+    else if (b == 21) Serial.print("21");
+    else if (b == 22) Serial.print("22");
+    else if (b == 23) Serial.print("23");
+    else if (b == 24) Serial.print("24");
+    else if (b == 25) Serial.print("25");
+    else if (b == 26) Serial.print("26");
+    else if (b == 27) Serial.print("27");
+    else if (b == 28) Serial.print("28");
+    else if (b == 29) Serial.print("29");
+    else if (b == 30) Serial.print("30");
+    else if (b == 31) Serial.print("31");
+}
 
 static void print_command(uint8_t b) {
     switch (b) {
@@ -121,15 +156,18 @@ static void print_command(uint8_t b) {
         default:
             if ((b & 0x60u) == 0x20u) {
                 Serial.print("L");
-                Serial.print((int)b & 0x1fu, DEC); break;
+                print_nr(b);
+                break;
             }
             if ((b & 0x60u) == 0x40u) {
                 Serial.print("T");
-                Serial.print((int)b & 0x1fu, DEC); break;
+                print_nr(b);
+                break;
             }            
             if ((b & 0x60u) == 0x60u) {
                 Serial.print("S");
-                Serial.print((int)b & 0x1fu, DEC); break;
+                print_nr(b);
+                break;
             } else {
                 Serial.print("0x");
                 Serial.print(b, HEX); break;
@@ -148,34 +186,33 @@ static void print_command(uint8_t b) {
 static void command_seen(void* ctx, uint8_t command, bool before) {
     (void)ctx;
     if (before) return;
-    Serial.print("CMD: ");
     print_command(command);
-    Serial.print(" SH: ");
-    Serial.print(ieee488_device.sh, HEX);
-    Serial.print(" AH: ");
-    Serial.print(ieee488_device.ah, HEX);
-    Serial.print(" T: ");
-    Serial.print(ieee488_device.talker, HEX);
-    Serial.print(" L: ");
-    Serial.print(ieee488_device.listener, HEX);
-    Serial.print(" SR: ");
-    Serial.print(ieee488_device.sr, HEX);
-    Serial.print(" RL: ");
-    Serial.print(ieee488_device.rl, HEX);
-    Serial.print(" PP: ");
-    Serial.print(ieee488_device.pp, HEX);
-    Serial.print(" SP: ");
-    Serial.print(ieee488_device.serial_poll_mode ? "true" : "false");
-    Serial.print(" TPA: ");
-    Serial.print(ieee488_device.talk_primary_addressed ? "true" : "false");
-    Serial.print(" LPA: ");
-    Serial.print(ieee488_device.listen_primary_addressed ? "true" : "false");
+    // Serial.print(" SH: ");
+    // print_nr(ieee488_device.sh);
+    // Serial.print(" AH: ");
+    // print_nr(ieee488_device.ah);
+    // Serial.print(" T: ");
+    // print_nr(ieee488_device.talker);
+    // Serial.print(" L: ");
+    // print_nr(ieee488_device.listener);
+    // Serial.print(" SR: ");
+    // print_nr(ieee488_device.sr);
+    // Serial.print(" RL: ");
+    // print_nr(ieee488_device.rl);
+    // Serial.print(" PP: ");
+    // print_nr(ieee488_device.pp);
+    // Serial.print(" SP: ");
+    // print_nr(ieee488_device.serial_poll_mode ? "true" : "false");
+    // Serial.print(" TPA: ");
+    // print_nr(ieee488_device.talk_primary_addressed ? "true" : "false");
+    // Serial.print(" LPA: ");
+    // print_nr(ieee488_device.listen_primary_addressed ? "true" : "false");
     // Serial.print(" PPC: ");
-    // Serial.print(ieee488_device.pp_config_addressed ? "true" : "false");
+    // print_nr(ieee488_device.pp_config_addressed ? "true" : "false");
     // Serial.print(" PPCfg: ");
-    // Serial.print(ieee488_device.pp_configured ? "true" : "false");
+    // print_nr(ieee488_device.pp_configured ? "true" : "false");
     // Serial.print(" PPLine: ");
-    // Serial.print(ieee488_device.pp_line, HEX);
+    // print_nr(ieee488_device.pp_line);
     // Serial.print(" PPSense: ");
     // Serial.print(ieee488_device.pp_sense ? "true" : "false");
     // Serial.print(" IndStat: ");
@@ -210,7 +247,7 @@ ieee488_callbacks_t cb = {
     device_clear,    // device_clear
     device_trigger,  // device_trigger
     remote_changed,  // remote_changed,
-    addressed_changed, // addressed_changed
+    0, // addressed_changed, // addressed_changed
     0, // command_seen,    // command_seen
     0                // ctx
 };

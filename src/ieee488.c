@@ -68,6 +68,7 @@ static __attribute__((always_inline)) void set_rl(ieee488_rl_state_t s) {
  * @param b The command byte to decode.
  */
 static __attribute__((always_inline)) void decode_command(uint8_t b) {
+    if (ieee488_device.restart_loop) return;
     if (ieee488_device.cb.command_seen) ieee488_device.cb.command_seen(ieee488_device.cb.ctx, b, true);
     bool addressed = (ieee488_device.listener == IEEE488_L_LADS);
     bool was_listener_addressed = (ieee488_device.listener == IEEE488_L_LADS || ieee488_device.listener == IEEE488_L_LACS);
@@ -88,10 +89,21 @@ static __attribute__((always_inline)) void decode_command(uint8_t b) {
             ieee488_device.talker = IEEE488_T_TADS;
     }
     if (b == IEEE488_CMD_SPE) ieee488_device.serial_poll_mode = true;
-    if (b == IEEE488_CMD_SPD) ieee488_device.serial_poll_mode = false;
+    if (b == IEEE488_CMD_SPD) {
+        ieee488_device.serial_poll_mode = false;
+        ieee488_device.talker = IEEE488_T_TIDS;
+        ieee488_device.talk_primary_addressed = false;
+    }
+    if (ieee488_device.serial_poll_mode && ((b & 0x60u) == 0x40u) && !mta(b)) {
+        ieee488_device.listener = IEEE488_L_LIDS;
+        ieee488_device.listen_primary_addressed = false;
+    }
 
     /* L/LE, clauses 2.6.3.1-.5. */
-    if (b == IEEE488_CMD_UNL || mta(b)) ieee488_device.listener = IEEE488_L_LIDS;
+    if (b == IEEE488_CMD_UNL || mta(b)) {
+        ieee488_device.listener = IEEE488_L_LIDS;
+        ieee488_device.listen_primary_addressed = false;
+    }
     if (ieee488_device.cfg.address_mode == IEEE488_ADDR_NORMAL && mla(b)) ieee488_device.listener = IEEE488_L_LADS;
     if (ieee488_device.cfg.address_mode == IEEE488_ADDR_EXTENDED) {
         if (mla(b))
@@ -639,7 +651,6 @@ void ieee488_poll(void) {
         ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
             ieee488_device.restart_loop = false;
         }
-        return;
     }
 #endif
     // reset IDY if needed
