@@ -8,10 +8,8 @@
 extern "C" {
 #endif
 
-// Determine if the ATN line is being handled in an interrupt context.
-// This can be used to achieve the timing constraints around ATN changes if the entire loop takes too much time.
-// It will also handle the time sensitive handling of IDY (ATN ^ EOI). This will fail if EOI is not asserted at the same time as ATN.
-#define ATN_INTR_HANDLER
+// WIP on DAV interrupt
+// #define DAV_INTR_HANDLER
 
 // When the pins are physically LOW, they are true (asserted) in the IEEE 488.1-1987 standard. 
 // When the pins are physically HIGH, they are false (released) in the standard. 
@@ -57,6 +55,14 @@ extern "C" {
 // DRIVE_DIO(value, enable) // drive the DIO lines with the given value (bit 0 = DIO1, bit 1 = DIO2, ..., bit 7 = DIO8) if enable is true, otherwise release the lines
 
 // TIME_US()  // Return the time in microseconds since startup. This is used for timing constraints in the IEEE 488.1-1987 standard.
+
+/** @brief Enable or disable the DAV interrupt.
+ * 
+ * Interrupt should be disabled when we control DAV 
+ * 
+ * @param enable true to enable the interrupt, false to disable it.
+ */
+void hal_control_DAV_interrupt(bool enable);
 
 /** @brief Initialize the HAL.
  * @return true if initialization was successful, false otherwise.

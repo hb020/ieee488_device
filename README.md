@@ -10,28 +10,27 @@ This can be used to create:
 
 ## Status
 
-This is an early version.
+This is an early version, and will likely not work when there are other devices on the bus.
 
 Working:
 
 - serial poll
+- parallel poll
 - read/write
 - trigger
 - remote/local
 - clear
-- ppoll
 
 Not compliant:
 
 - timing on an AT4809.
   - The fastest I can get is about 3us for t2 or t5, while it should be 200ns.
-  - But none of my gateways have problems with it, PROVIDED there are no other devices on the bus. Once there are more devices, I start missing commands, most visibly on serial poll (I miss the `UNL`).
-  - A faster CPU, or elaborated CCL, is likely required.
-  - Interrupt handling on DAV (fetching commands) is a possible patch against missing commands.
+  - None of my gateways have problems with it, PROVIDED there are no other devices on the bus. Then things break: others will have finished the handshake before I can even start it. Hence: I'm likely to be missing commands.
+  - A faster CPU, or elaborated CCL, is required.
+  - Interrupt handling on DAV (fetching commands) may be a possible patch against missing commands, but it is unlikely, since I'd need below 1 us handling.
 
 TODO:
 
-- DAV interrupt handling
 - allow more than 1 address to be adressed
 
 ## Supported functions/capabilities

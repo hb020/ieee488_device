@@ -5,17 +5,34 @@
 
 // See "ieee488_hal_ATmega4809.h" for the HAL interface definition.
 
-#ifdef ATN_INTR_HANDLER  
-
-// Interrupt handler for ATN line (PC6)
+// Interrupt handler for ATN (PC6) and maybe also DAV (PC1)
 // Naked interrupt is NOT possible, because I need regular CPU registers inside the handler.
 
 ISR(PORTC_PORT_vect) {
+#ifndef DAV_INTR_HANDLER
   ieee488_handle_atn_interrupt(); // Call the handler for ATN interrupt
-  // Handle ATN interrupt
-  PORTC.INTFLAGS = (1 << 6); // Clear the interrupt flag for ATN
+  VPORTC.INTFLAGS |= (1 << 6); // Clear the interrupt flag for ATN
+#else
+  if (PORTC.INTFLAGS & (1 << 6)) { // ATN interrupt
+    ieee488_handle_atn_interrupt(); // Call the handler for ATN interrupt
+    VPORTC.INTFLAGS |= (1 << 6); // Clear the interrupt flag for ATN
+  }
+  if (PORTC.INTFLAGS & (1 << 1)) { // DAV interrupt
+    // Handle DAV interrupt
+    VPORTC.INTFLAGS |= (1 << 1); // Clear the interrupt flag for DAV
+  }
+#endif
 }
-#endif  // ATN_INTR_HANDLER
+
+#ifdef DAV_INTR_HANDLER
+void hal_control_DAV_interrupt(bool enable) {
+  if (enable) {
+    PORTC.PIN1CTRL |= PORT_ISC_FALLING_gc; // Enable interrupt on LOW for DAV (PC1)
+  } else {
+    PORTC.PIN1CTRL &= ~PORT_ISC_gm; // Disable interrupt on DAV (PC1)
+  }
+}
+#endif
 
 /** @brief Initialize the HAL.
  * @return true if initialization was successful, false otherwise.
@@ -52,11 +69,12 @@ bool hal_init(void) {
   VPORTC.DIR = 0b00000000; // Set all control lines to input
 #endif
 
-#ifdef ATN_INTR_HANDLER
   PORTC.PIN6CTRL |= PORT_ISC_BOTHEDGES_gc; // Enable interrupt on both edges for ATN (PC6)
+#ifdef DAV_INTR_HANDLER  
+  hal_control_DAV_interrupt(true); // Enable interrupt on DAV (PC1)
+#endif
   CPUINT.LVL1VEC = PORTC_PORT_vect_num; // Set the interrupt vector for PORTC to the handler
   SREG |= (1 << SREG_I); // Enable global interrupts
-#endif
 
   return true;
 

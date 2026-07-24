@@ -562,6 +562,7 @@ static __attribute__((always_inline)) void atn_handler(void) {
     bool atn = ATN_IS_ASSERTED();
     bool restart_loop = false;
 
+    // START ppoll section
     // a slight delay later, get EOI state, to see if ATN and EOI are asserted at the same time
     bool idy = false;
     if (atn && EOI_IS_ASSERTED()) {
@@ -579,16 +580,22 @@ static __attribute__((always_inline)) void atn_handler(void) {
         ieee488_device.pp = IEEE488_PP_PPSS;
         DRIVE_DIO(0, false);
     }
+    // END ppoll section
+
+    // TODO: you may want to mix in the IFC reaction
 
     // t2: SH, AH, T, L, LE, TE state transition on ATN
     if (atn) {
-        // ATN asserted: transition active talker/listener to addressed, and force source/acceptor to idle
+        // ATN asserted: force source/acceptor to idle
         if (ieee488_device.sh != IEEE488_SH_SIDS) {
             source_force_idle_raw(true, idy);
             restart_loop = true;  // restart the main loop to handle the new state
         }
         if (ieee488_device.ah != IEEE488_AH_AIDS) {
-            acceptor_force_idle_raw(idy);
+            // Move to the AH idle state. Assert NDAC, because that is what the acceptor section does. 
+            acceptor_force_idle_raw(true);
+            NDAC_ASSERT();
+            NRFD_RELEASE();
             restart_loop = true;  // restart the main loop to handle the new state
         }
         /* ATN asserted: transition active talker/listener to addressed */
@@ -617,7 +624,6 @@ static __attribute__((always_inline)) void atn_handler(void) {
     }
 }
 
-#ifdef ATN_INTR_HANDLER
 /** @brief Handle an ATN interrupt.
  *
  * This interrupt handler should be called when ATN changes state.
@@ -627,20 +633,16 @@ void __attribute__((always_inline)) ieee488_handle_atn_interrupt(void) {
     atn_handler();
 }
 
-#endif
-
-// TODO make sure that whatever the interrupt handler controls, is compatible with the rest of the code
-
+/** @brief Poll the IEEE 488 device states, and act upon them
+ * 
+ * The most time sensitive tasks are done in the interrupt handler.
+ * This function is called in the main loop, and handles the rest of the state machine. 
+ * Do NOT use blocking calls in this function, as it is expected to be called frequently and must complete quickly.
+ * 
+ */
 void ieee488_poll(void) {
     
-#ifndef ATN_INTR_HANDLER
-    bool atn = ATN_IS_ASSERTED();
-    if (atn != ieee488_device.last_atn) {
-        atn_handler();
-        ieee488_device.restart_loop = false;
-    }
-#else
-    // get the values from the interrupt handler, which should have been called on ATN change
+    // get the values from the interrupt handler, which should have been called on ATN or DAV change
     bool atn = false;
     bool restart_loop = false;
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
@@ -652,7 +654,7 @@ void ieee488_poll(void) {
             ieee488_device.restart_loop = false;
         }
     }
-#endif
+
     // reset IDY if needed
     if (ieee488_device.pp_configured) {
         ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
