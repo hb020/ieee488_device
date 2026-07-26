@@ -278,9 +278,9 @@ void showConfig(void) {
         Serial.print(cfg.secondary_address);
     }
     Serial.println();
-    Serial.print("- EOI: ");
+    Serial.print("- EOI (outgoing): ");
     Serial.println(cfg.use_eoi ? "enabled" : "disabled");
-    Serial.print("- EOS: ");
+    Serial.print("- EOS (incoming): ");
     if (cfg.eos_enabled) {
         Serial.print("0x");
         Serial.println(cfg.eos_byte, HEX);
@@ -338,9 +338,9 @@ void showPrompt(void) {
 void printMenu(void) {
     Serial.println("\n=== IEEE 488 Device Configuration Menu ===");
     Serial.println("c. Show configuration");
-    Serial.println("a. Set address (0-30[,0-30])");
-    Serial.println("e. Toggle EOI");
-    Serial.println("s. Set EOS byte (hex)");
+    Serial.println("a. Set address (0-30)[,(0-30)]");
+    Serial.println("e. Toggle outgoing EOI use");
+    Serial.println("s. Set incoming EOS byte");
     Serial.println("3. Set T3 timeout (us)");
     Serial.println("1. Set T1 delay (us)");
     Serial.println("p. Set PP line (1-8, 0 to disable)");
@@ -374,52 +374,57 @@ bool handleSerialConfig(void) {
                 Serial.print(cfg.secondary_address);
             }
             Serial.println();
-            Serial.print("Enter primary address (0-30): ");
+            Serial.print("Enter address (0-30)[,(0-30)]: ");
             len = readLine(buf, sizeof(buf));
             if (len > 0) {
-                value = atoi(buf);
-                if (value <= 30) {
-                    cfg.primary_address = value;
-                    Serial.print("Primary address set to ");
-                    Serial.println(value);
-                } else {
-                    Serial.println("Invalid address (0-30)");
-                    Serial.print(value, DEC);
-                    Serial.println(" is not a valid primary address");
+                unsigned int primary = 0;
+                unsigned int secondary = 0;
+                char *cptr = strchr(buf, ',');
+                if (cptr) {
+                    *cptr = '\0';
+                    cptr++;
+                    secondary = atoi(cptr);
+                }
+                primary = atoi(buf);
+                if (primary > 30 || (cptr && secondary > 30)) {
+                    Serial.print("Ignoring invalid address ");
+                    Serial.print(primary, DEC);
+                    if (cptr) {
+                        Serial.print(",");
+                        Serial.print(secondary, DEC);
+                    }
+                    Serial.println();
                     break;
                 }
+                cfg.primary_address = primary;
+                if (cptr){
+                    cfg.secondary_address = secondary;
+                    cfg.extended_address = true;
+                }
+                else {
+                    cfg.secondary_address = 0;
+                    cfg.extended_address = false;
+                }
+                Serial.print("Address set to ");
+                Serial.print(cfg.primary_address);
+                if (cfg.extended_address) {
+                    Serial.print(",");
+                    Serial.print(cfg.secondary_address);
+                }
+                Serial.println();
             } else {
                 Serial.println("Keeping address unchanged");
-                break;
-            }
-
-            Serial.print("Enter secondary address (0-30 or empty for none): ");
-            len = readLine(buf, sizeof(buf));
-            if (len == 0) {
-                cfg.secondary_address = 0;
-                cfg.extended_address = false;
-                Serial.println("Secondary address cleared");
-                break;
-            }
-            value = atoi(buf);
-            if (value <= 30) {
-                cfg.secondary_address = value;
-                cfg.extended_address = true;
-                Serial.print("Secondary address set to ");
-                Serial.println(value);
-            } else {
-                Serial.println("Invalid secondary address (0-30)");
             }
             break;
                         
         case 'e':
             cfg.use_eoi = !cfg.use_eoi;
-            Serial.print("EOI ");
+            Serial.print("EOI on outgoing messages is now ");
             Serial.println(cfg.use_eoi ? "enabled" : "disabled");
             break;
             
         case 's':
-            Serial.print("EOS: ");
+            Serial.print("EOS on incoming messages is now ");
             if (cfg.eos_enabled) {
                 Serial.print("0x");
                 if (cfg.eos_byte < 0x10) Serial.print("0");
@@ -440,6 +445,7 @@ bool handleSerialConfig(void) {
                 cfg.eos_byte = (uint8_t)value;
                 cfg.eos_enabled = true;
                 Serial.print("EOS byte set to 0x");
+                if (cfg.eos_byte < 0x10) Serial.print("0");
                 Serial.println(cfg.eos_byte, HEX);
             } else {
                 Serial.println("Invalid byte value");

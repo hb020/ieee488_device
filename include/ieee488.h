@@ -83,8 +83,8 @@ typedef struct {
     bool extended_address;                // true if using extended addressing, false for normal addressing
     bool talk_only;                       // local ton message, 2.5.5
     bool listen_only;                     // local lon message, 2.6.5
-    bool use_eoi;                         // EOI line is used to indicate the end of a message (true) or not (false)
-    uint8_t eos_byte;                     // The byte value that indicates the end of a message when EOI is NOT used.
+    bool use_eoi;                         // Use the EOI line to indicate the end of a message going to the bus. If false, the controller has to deduct the end of message from the returned data instead of from EOI.
+    uint8_t eos_byte;                     // The byte value that indicates the end of a message coming from the bus, aside from any potential EOI.
     bool eos_enabled;                     // True if EOS byte is enabled, false otherwise.
     uint32_t handshake_timeout_us;        // T3 handshake timeout us, 0 = no software timeout
     uint32_t t1_delay_us;                 // T1 source settling delay; see 2.3 and 3.8
