@@ -37,6 +37,10 @@ TODO:
   - 'find': x,0 is found, but not the others
   - read/write/clear/local/remote/trigger/readstb work, and they do not react to other secondary addresses
 
+## Notes on compatibility with gateways
+
+The E5810A will not see the device during a web interface 'Find' if you use a secondary address other than 0. Using no secondary address or using 0 as secondary address is OK. The reason is that it will only initiate in scanning for secondary addresses other than 0 if it finds a reply on secondary address 0.
+
 ## Supported functions/capabilities
 
 - `SH1` source handshake — IEEE 488.1-1987 §2.3

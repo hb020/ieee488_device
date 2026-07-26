@@ -6,7 +6,7 @@
 #define LED_R 13
 #define LED_G 39
 #define LED_B 38
-bool debug_output = false;
+int debug_output = 0;
 
 /********************************************************************
  * Callbacks. They must be non-blocking; any blocking operations should
@@ -78,7 +78,7 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
         digitalWrite(LED_G, LOW);
         digitalWrite(LED_R, HIGH);
     }
-    if (debug_output) {
+    if (debug_output > 1) {
         Serial.print(remote ? "Remote" : "Local");
         Serial.print(lockout ? " lockout" : "");
         Serial.println();
@@ -92,7 +92,7 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
 static void addressed_changed(void* ctx, bool addressed) {
     (void)ctx;
     digitalWrite(LED_B, addressed ? LOW : HIGH);
-    if (debug_output) {
+    if (debug_output > 1) {
         Serial.print(addressed ? "Addressed" : "Unaddressed");
         Serial.println();
     }
@@ -298,7 +298,9 @@ void showConfig(void) {
         Serial.println(cfg.pp_line);
     }
     Serial.print("- Debug output: ");
-    Serial.println(debug_output ? "enabled" : "disabled");
+    if (debug_output == 0) Serial.println("disabled");
+    else if (debug_output == 1) Serial.println("enabled");
+    else Serial.println("verbose");
 }
 
 /********************************************************************
@@ -351,7 +353,11 @@ bool handleSerialConfig(void) {
     if (!Serial.available()) return false;
     
     char cmd = Serial.read();
-    if (cmd == '\n' || cmd == '\r') return false; // Ignore newlines
+    if (cmd == '\r') return false; // Ignore newlines
+    if (cmd == '\n') {
+        showPrompt();
+        return false; // print newline, but ignore the rest
+    }
     Serial.println(cmd);
     
     uint32_t value = 0;
@@ -361,6 +367,13 @@ bool handleSerialConfig(void) {
     
     switch (cmd) {
         case 'a':
+        Serial.print("Current address: ");
+            Serial.print(cfg.primary_address);
+            if (cfg.extended_address) {
+                Serial.print(",");
+                Serial.print(cfg.secondary_address);
+            }
+            Serial.println();
             Serial.print("Enter primary address (0-30): ");
             len = readLine(buf, sizeof(buf));
             if (len > 0) {
@@ -376,7 +389,7 @@ bool handleSerialConfig(void) {
                     break;
                 }
             } else {
-                Serial.println("No input received");
+                Serial.println("Keeping address unchanged");
                 break;
             }
 
@@ -406,6 +419,15 @@ bool handleSerialConfig(void) {
             break;
             
         case 's':
+            Serial.print("EOS: ");
+            if (cfg.eos_enabled) {
+                Serial.print("0x");
+                if (cfg.eos_byte < 0x10) Serial.print("0");
+                Serial.print(cfg.eos_byte, HEX);
+            } else {
+                Serial.print("disabled");
+            }        
+            Serial.println();
             Serial.print("Enter EOS byte (hex 00-FF or empty for none): ");
             len = readLine(buf, sizeof(buf));
             if (len == 0) {
@@ -425,6 +447,8 @@ bool handleSerialConfig(void) {
             break;
                         
         case '3':
+            Serial.print("T3 Timeout (us): ");
+            Serial.println(cfg.handshake_timeout_us);        
             Serial.print("Enter T3 timeout (us): ");
             len = readLine(buf, sizeof(buf));
             if (len >  0) {            
@@ -434,11 +458,13 @@ bool handleSerialConfig(void) {
                 Serial.print(value);
                 Serial.println(" us");
             } else {
-                Serial.println("No input received");
+                Serial.println("Keeping T3 timeout unchanged");
             }
             break;
             
         case '1':
+            Serial.print("T1 Delay (us): ");
+            Serial.println(cfg.t1_delay_us);
             Serial.print("Enter T1 delay (us): ");
             len = readLine(buf, sizeof(buf));
             if (len >  0) {            
@@ -448,11 +474,18 @@ bool handleSerialConfig(void) {
                 Serial.print(value);
                 Serial.println(" us");
             } else {
-                Serial.println("No input received");
+                Serial.println("Keeping T1 delay unchanged");
             }
             break;
             
         case 'p':
+            Serial.print("Current PP line: ");
+            if (cfg.pp_line < 1 || cfg.pp_line > 8) {
+                Serial.print("not configured");
+            } else {
+                Serial.print(cfg.pp_line);
+            }
+            Serial.println();
             Serial.print("Enter PP line (1-8, 0 to disable): ");
             len = readLine(buf, sizeof(buf));
             if (len >  0) {            
@@ -473,14 +506,17 @@ bool handleSerialConfig(void) {
                     Serial.println("Invalid PP line (0, 1-8)");
                 }
             } else {
-                Serial.println("No input received");
+                Serial.println("Keeping PP line unchanged");
             }
             break;
 
         case 'd':
-            debug_output = !debug_output;
+            debug_output++;
+            if (debug_output > 2) debug_output = 0;
             Serial.print("Debug output ");
-            Serial.println(debug_output ? "enabled" : "disabled");
+            if (debug_output == 0) Serial.println("disabled");
+            else if (debug_output == 1) Serial.println("enabled");
+            else Serial.println("verbose");
             break;
             
         case 'c':
