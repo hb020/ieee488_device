@@ -14,6 +14,7 @@ This is an early version, and will likely not work when there are other devices 
 
 Working:
 
+- extended addressing
 - serial poll
 - parallel poll
 - read/write
@@ -21,6 +22,7 @@ Working:
 - remote/local
 - clear
 - basic config menu
+- EOI/EOS handling
 
 Not compliant:
 
@@ -33,9 +35,20 @@ Not compliant:
 
 TODO:
 
-- check how extended address should work:
-  - 'find': x,0 is found, but not the others
-  - read/write/clear/local/remote/trigger/readstb work, and they do not react to other secondary addresses
+- write a pseudo device that simulates some of the 'difficulties' with GPIB and support automatic CXI-11.2 gateway tests:
+  - basic `*IDN?`
+  - large write
+  - large read
+  - delay in write
+  - delay in read
+  - srq generation from command, with programmable delay
+  - srq generation from trigger, with programmable delay
+  - status byte SRQ bit reset after read stb
+  - clear, collaborating with status byte set command
+  - address change
+  - EOI/EOS change
+  - Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
+- Support multiple addresses at the same time
 
 ## Notes on compatibility with gateways
 
