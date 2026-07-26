@@ -39,7 +39,18 @@ TODO:
 
 ## Notes on compatibility with gateways
 
+### E5810A
+
 The E5810A will not see the device during a web interface 'Find' if you use a secondary address other than 0. Using no secondary address or using 0 as secondary address is OK. The reason is that it will only initiate in scanning for secondary addresses other than 0 if it finds a reply on secondary address 0.
+
+### AR488
+
+At the time of writing, a couple of PRs are open at the AR488 repo regarding ppoll and serial poll behaviour.
+
+### Side quests on "find"
+
+- E5810A tests adress "N". If it does not reply, it tests adresses "N,0". If that replies, it will also test the other "N,(1-30)" address combinations. The sequence for a test of '5,x' where T = 21 and 5,0 exists is: `...,UNL,T21,L05,UNL,T21,L05,S00,UNL,T21,L05,S01,UNL,T21,L05,S02,UNL,...`
+- AR488 tests address "N". If it does not reply, it sends the primary address and then all secondary addresses in sequence without looking at NDAC. If at the end it finds NDAC asserted, it will test address "N,0" properly, and then tests all secondary addresses without interlacing the "Talk to" address between the tests. Unless AR488 PR #87 is solved, it will however fail to detect any address other than 0 because it is non compliant.
 
 ## Supported functions/capabilities
 
