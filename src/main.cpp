@@ -2,74 +2,18 @@
 
 #include "ieee488.h"
 #include "ieee488_hal.h"
+#include "scpi_handler.h"
 
 #define LED_R 13
 #define LED_G 39
 #define LED_B 38
 int debug_output = 0;
 
-/********************************************************************
- * Callbacks. They must be non-blocking; any blocking operations should
- * be handled in a separate thread or interrupt context.
- ********************************************************************/
-
-static unsigned int tx_counter = 0;
-/** @brief Get the next byte for transmission.
- * @param ctx The context pointer provided to ieee488_init().
- * @param byte Pointer to a byte to be filled with the next byte to transmit.
- * @param end Pointer to a boolean to be filled with true if this is the last byte of the message, false otherwise.
- * @return true if a byte was provided, false if there are no more bytes to send.
- */
-static bool device_tx(void* c, uint8_t* b, bool* end) {
-    (void)c;
-    static const char s[] = "READY\n";
-    if (tx_counter >= sizeof(s) - 1) {
-        // Let device_rx determine new data to send.
-        return false;
-    }
-    *b = (uint8_t)s[tx_counter++];
-    *end = tx_counter == sizeof(s) - 1;
-    return true;
-}
-
-/** @brief Handle a received byte.
- * @param ctx The context pointer provided to ieee488_init().
- * @param byte The received byte.
- * @param end True if this is the last byte of the message, false otherwise.
- */
-static void device_rx(void* c, uint8_t b, bool end) {
-    (void)c;
-    tx_counter = 0; // allow new transmission to start after receiving a byte
-    Serial.print("RX ");
-    Serial.print(b, HEX);
-    if (end) Serial.print(" END");
-    Serial.println();
-}
-
-static void device_clear(void* c, bool selected) {
-    (void)c;
-    Serial.print(selected ? "selected" : "universal");
-    Serial.println(" clear");
-    tx_counter = 0;
-}
-
-static void device_trigger(void* c) {
-    (void)c;
-    Serial.println("trigger");
-}
-
-static uint8_t status_byte(void* c) {
-    (void)c;
-    return 0x10;
-}
-
 /** @brief Handle a change in the remote/local status. (RL1)
- * @param ctx The context pointer provided to ieee488_init().
  * @param remote True if the device is now in remote mode, false if in local mode.
  * @param lockout True if the device is now in lockout state, false otherwise.
  */
-static void remote_changed(void* ctx, bool remote, bool lockout) {
-    (void)ctx;
+static void remote_changed(bool remote, bool lockout) {
     (void)lockout;
     if (remote) {
         digitalWrite(LED_R, LOW);
@@ -86,11 +30,9 @@ static void remote_changed(void* ctx, bool remote, bool lockout) {
 }
 
 /** @brief Handle a change in the addressed status.
- * @param ctx The context pointer provided to ieee488_init().
  * @param addressed True if the device is now addressed, false otherwise.
  */
-static void addressed_changed(void* ctx, bool addressed) {
-    (void)ctx;
+static void addressed_changed(bool addressed) {
     digitalWrite(LED_B, addressed ? LOW : HIGH);
     if (debug_output > 1) {
         Serial.print(addressed ? "Addressed" : "Unaddressed");
@@ -100,38 +42,8 @@ static void addressed_changed(void* ctx, bool addressed) {
 
 static void print_nr(uint8_t b) {
     b = b & 0x1fu;
-    if (b == 0) Serial.print("00");
-    else if (b == 1) Serial.print("01");
-    else if (b == 2) Serial.print("02");
-    else if (b == 3) Serial.print("03");
-    else if (b == 4) Serial.print("04");
-    else if (b == 5) Serial.print("05");
-    else if (b == 6) Serial.print("06");
-    else if (b == 7) Serial.print("07");
-    else if (b == 8) Serial.print("08");
-    else if (b == 9) Serial.print("09");
-    else if (b == 10) Serial.print("10");
-    else if (b == 11) Serial.print("11");
-    else if (b == 12) Serial.print("12");
-    else if (b == 13) Serial.print("13");
-    else if (b == 14) Serial.print("14");
-    else if (b == 15) Serial.print("15");
-    else if (b == 16) Serial.print("16");
-    else if (b == 17) Serial.print("17");
-    else if (b == 18) Serial.print("18");
-    else if (b == 19) Serial.print("19");
-    else if (b == 20) Serial.print("20");
-    else if (b == 21) Serial.print("21");
-    else if (b == 22) Serial.print("22");
-    else if (b == 23) Serial.print("23");
-    else if (b == 24) Serial.print("24");
-    else if (b == 25) Serial.print("25");
-    else if (b == 26) Serial.print("26");
-    else if (b == 27) Serial.print("27");
-    else if (b == 28) Serial.print("28");
-    else if (b == 29) Serial.print("29");
-    else if (b == 30) Serial.print("30");
-    else if (b == 31) Serial.print("31");
+    if (b < 10) Serial.print("0");
+    Serial.print(b, DEC);
 }
 
 static void print_command(uint8_t b) {
@@ -174,12 +86,10 @@ static void print_command(uint8_t b) {
  *
  * Is called before the command is processed.
  *
- * @param ctx The context pointer provided to ieee488_init().
  * @param command The command byte that was seen.
  * @param before True if called before processing the command, false if called after.
  */
-static void command_seen(void* ctx, uint8_t command, bool before) {
-    (void)ctx;
+static void command_seen(uint8_t command, bool before) {
     if (before) return;
     print_command(command);
     // Serial.print(" SH: ");
@@ -244,7 +154,6 @@ ieee488_callbacks_t cb = {
     remote_changed,  // remote_changed,
     addressed_changed, // addressed_changed
     command_seen,    // command_seen
-    0                // ctx
 };
 
 /********************************************************************
@@ -262,7 +171,10 @@ ieee488_config_t cfg = {
     false,                // EOS enabled
     1000,                 // T3 handshake timeout us, 0 is indefinite
     10,                   // T1 delay us
-    0                     // pp_line
+    0,                    // pp_line
+    0,                    // rx_delay_us
+    0,                    // tx_delay_us
+    0                     // reply_delay_s
 };
 
 /********************************************************************
@@ -297,6 +209,10 @@ void showConfig(void) {
     } else {
         Serial.println(cfg.pp_line);
     }
+    Serial.print("- RX Inter-byte delay (us): ");
+    Serial.println(cfg.rx_delay_us);
+    Serial.print("- TX Inter-byte delay (us): ");
+    Serial.println(cfg.tx_delay_us);
     Serial.print("- Debug output: ");
     if (debug_output == 0) Serial.println("disabled");
     else if (debug_output == 1) Serial.println("enabled");
@@ -344,6 +260,8 @@ void printMenu(void) {
     Serial.println("3. Set T3 timeout (us)");
     Serial.println("1. Set T1 delay (us)");
     Serial.println("p. Set PP line (1-8, 0 to disable)");
+    Serial.println("r. Set RX inter-byte delay (us)");
+    Serial.println("t. Set TX inter-byte delay (us)");
     Serial.println("d. Toggle debug output");
     Serial.println("q. Activate and run the device");
 }
@@ -515,6 +433,36 @@ bool handleSerialConfig(void) {
                 Serial.println("Keeping PP line unchanged");
             }
             break;
+        
+        case 'r':
+            Serial.print("Current RX inter-byte delay (us): ");
+            Serial.println(cfg.rx_delay_us);
+            Serial.print("Enter RX inter-byte delay (us): ");
+            len = readLine(buf, sizeof(buf));
+            if (len >  0) {            
+                value = strtoul(buf, NULL, 10);
+                cfg.rx_delay_us = value;
+                Serial.print("RX inter-byte delay set to ");
+                Serial.print(value);
+                Serial.println(" us");
+            } else {
+                Serial.println("Keeping RX inter-byte delay unchanged");
+            }
+            break;
+        case 't':
+            Serial.print("Current TX inter-byte delay (us): ");
+            Serial.println(cfg.tx_delay_us);
+            Serial.print("Enter TX inter-byte delay (us): ");
+            len = readLine(buf, sizeof(buf));
+            if (len >  0) {            
+                value = strtoul(buf, NULL, 10);
+                cfg.tx_delay_us = value;
+                Serial.print("TX inter-byte delay set to ");
+                Serial.print(value);
+                Serial.println(" us");
+            } else {
+                Serial.println("Keeping TX inter-byte delay unchanged");
+            }
 
         case 'd':
             debug_output++;
@@ -594,5 +542,6 @@ void loop() {
         }
     } else {
         ieee488_poll();
+        handle_idle();
     }
 }

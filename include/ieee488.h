@@ -40,7 +40,6 @@ typedef enum {
 
 // See "ieee488_hal.h" for the HAL interface definition.
 // The HAL must implement wired-OR/open-collector semantics where required.
-// It does not go through ctx for speed reasons, but the HAL can use its own context if needed.
 
 /* IEEE 488.1 multiline command codes, 2.13 and Annex E. */
 enum {
@@ -89,6 +88,9 @@ typedef struct {
     uint32_t handshake_timeout_us;        // T3 handshake timeout us, 0 = no software timeout
     uint32_t t1_delay_us;                 // T1 source settling delay; see 2.3 and 3.8
     uint8_t pp_line;                      // The DIO line to use for parallel poll local (1-8). 0 for 'not configured'.
+    uint16_t rx_delay_us;                 // Delay in microseconds between receiving bytes. 0 for no delay.
+    uint16_t tx_delay_us;                 // Delay in microseconds between transmitting bytes. 0 for no delay.
+    uint16_t reply_delay_s;               // Delay in seconds before sending a reply. 0 for no delay. This is handled outside of the ieee488 code.   
 } ieee488_config_t;
 
 /** @brief Callbacks for an IEEE 488.1-1987 device.
@@ -99,63 +101,54 @@ typedef struct {
     /* Device-dependent data path, outside the standard (1.4.1, 2.1.1). */
 
     /** @brief Get the next byte for transmission.
-     * @param ctx The context pointer provided to ieee488_init().
      * @param byte Pointer to a byte to be filled with the next byte to transmit.
      * @param end Pointer to a boolean to be filled with true if this is the last byte of the message, false otherwise.
      * @return true if a byte was provided, false if there are no more bytes to send.
      */
-    bool (*tx_next)(void* ctx, uint8_t* byte, bool* end);
+    bool (*tx_next)(uint8_t* byte, bool* end);
 
     /** @brief Handle a received byte.
-     * @param ctx The context pointer provided to ieee488_init().
      * @param byte The received byte.
      * @param end True if this is the last byte of the message, false otherwise.
      */
-    void (*rx_byte)(void* ctx, uint8_t byte, bool end);
+    void (*rx_byte)(uint8_t byte, bool end);
 
     /** @brief Get the status byte.
-     * @param ctx The context pointer provided to ieee488_init().
      * @return The status byte with STB bits excluding RQS bit 6.
      */
-    uint8_t (*status_byte)(void* ctx);
+    uint8_t (*status_byte)(void);
 
     /* Interface function actions. */
 
     /** @brief Handle a device clear (DC1, 2.10) command.
-     * @param ctx The context pointer provided to ieee488_init().
      * @param selected True if the device is addressed, false if it is a universal clear.
      */
-    void (*device_clear)(void* ctx, bool selected);
+    void (*device_clear)(bool selected);
 
     /** @brief Handle a device trigger (DT1, 2.11) command.
-     * @param ctx The context pointer provided to ieee488_init().
      */
-    void (*device_trigger)(void* ctx);
+    void (*device_trigger)(void);
 
     /** @brief Handle a change in the remote/local status. (RL1)
-     * @param ctx The context pointer provided to ieee488_init().
      * @param remote True if the device is now in remote mode, false if in local mode.
      * @param lockout True if the device is now in lockout state, false otherwise.
      */
-    void (*remote_changed)(void* ctx, bool remote, bool lockout);
+    void (*remote_changed)(bool remote, bool lockout);
 
     /** @brief Handle a change in the addressed status.
-     * @param ctx The context pointer provided to ieee488_init().
      * @param addressed True if the device is now addressed, false otherwise.
      */
-    void (*addressed_changed)(void* ctx, bool addressed);
+    void (*addressed_changed)(bool addressed);
 
     /** @brief Handle a command seen on the bus.
      *
      * Is called before and after the command processing.
      *
-     * @param ctx The context pointer provided to ieee488_init().
      * @param command The command byte that was seen.
      * @param before True if called before processing the command, false if called after.
      */
-    void (*command_seen)(void* ctx, uint8_t command, bool before);
+    void (*command_seen)(uint8_t command, bool before);
 
-    void* ctx;
 } ieee488_callbacks_t;
 
 // Force the enums in 1 byte each, so that the need for atomic access is reduced.
@@ -297,13 +290,6 @@ bool ieee488_is_remote(void);
  * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
  */
 extern inline void ieee488_handle_atn_interrupt(void);
-
-/** @brief Handle an IDY (ATN && EOI) interrupt.
- *
- * This interrupt handler should be called when (ATN && EOI) change state.
- * It is expected to be called from an interrupt context and must complete quickly to meet the timing requirements of the IEEE 488.1 standard.
- */
-extern inline void ieee488_handle_idy_interrupt(void);
 
 #ifdef __cplusplus
 }

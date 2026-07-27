@@ -60,7 +60,7 @@ static __attribute__((always_inline)) void set_rl(ieee488_rl_state_t s) {
     ieee488_device.rl = s;
     bool remote = (s == IEEE488_RL_REMS || s == IEEE488_RL_RWLS);
     bool lockout = (s == IEEE488_RL_LWLS || s == IEEE488_RL_RWLS);
-    if (ieee488_device.cb.remote_changed) ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, remote, lockout);
+    if (ieee488_device.cb.remote_changed) ieee488_device.cb.remote_changed(remote, lockout);
 }
 
 /** @brief Decode an IEEE 488 command byte and update the device state accordingly.
@@ -69,7 +69,7 @@ static __attribute__((always_inline)) void set_rl(ieee488_rl_state_t s) {
  */
 static __attribute__((always_inline)) void decode_command(uint8_t b) {
     if (ieee488_device.restart_loop) return;
-    if (ieee488_device.cb.command_seen) ieee488_device.cb.command_seen(ieee488_device.cb.ctx, b, true);
+    if (ieee488_device.cb.command_seen) ieee488_device.cb.command_seen(b, true);
     bool addressed = (ieee488_device.listener == IEEE488_L_LADS);
     bool was_listener_addressed = (ieee488_device.listener == IEEE488_L_LADS || ieee488_device.listener == IEEE488_L_LACS);
 
@@ -127,13 +127,13 @@ static __attribute__((always_inline)) void decode_command(uint8_t b) {
     ieee488_rl_state_t rl = ieee488_device.rl;
     switch (b) {
         case IEEE488_CMD_DCL:
-            if (ieee488_device.cb.device_clear) ieee488_device.cb.device_clear(ieee488_device.cb.ctx, false);
+            if (ieee488_device.cb.device_clear) ieee488_device.cb.device_clear(false);
             break;
         case IEEE488_CMD_SDC:
-            if (addressed && ieee488_device.cb.device_clear) ieee488_device.cb.device_clear(ieee488_device.cb.ctx, true);
+            if (addressed && ieee488_device.cb.device_clear) ieee488_device.cb.device_clear(true);
             break;
         case IEEE488_CMD_GET:
-            if (addressed && ieee488_device.cb.device_trigger) ieee488_device.cb.device_trigger(ieee488_device.cb.ctx);
+            if (addressed && ieee488_device.cb.device_trigger) ieee488_device.cb.device_trigger();
             break;
         case IEEE488_CMD_LLO:
             if (rl == IEEE488_RL_LOCS)
@@ -169,7 +169,7 @@ static __attribute__((always_inline)) void decode_command(uint8_t b) {
                 ieee488_device.pp_config_addressed = false;
             break;
     }
-    if (ieee488_device.cb.command_seen) ieee488_device.cb.command_seen(ieee488_device.cb.ctx, b, false);
+    if (ieee488_device.cb.command_seen) ieee488_device.cb.command_seen(b, false);
 }
 
 /** @brief Reset the IEEE 488 device to its initial state.
@@ -211,9 +211,9 @@ void ieee488_reset(bool from_power_on) {
         notify_addressed_changed = true;
     }
     if (notify_remote_local && ieee488_device.cb.remote_changed)
-        ieee488_device.cb.remote_changed(ieee488_device.cb.ctx, false, false);
+        ieee488_device.cb.remote_changed(false, false);
     if (notify_addressed_changed && ieee488_device.cb.addressed_changed)
-        ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, false);
+        ieee488_device.cb.addressed_changed(false);
 }
 
 /** @brief Initialize the IEEE 488 device with the given HAL, configuration, and callbacks.
@@ -347,18 +347,18 @@ static void acceptor(bool atn) {
         case IEEE488_AH_ACRS:
             /* No timeout here: waiting for DAV start is an idle condition, not an in-progress byte. */
             if (dav) {
+                // TODO add delay section here based on ieee488_device.cfg.rx_delay_us if > 0, and !atn                
                 ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
                     if (ieee488_device.restart_loop) return;
                     NRFD_ASSERT();
                 }
-                if (ieee488_device.restart_loop) return;
                 uint8_t b = READ_DIO();
                 if (ieee488_device.restart_loop) return;
                 if (atn)
                     decode_command(b);
                 else if (ieee488_device.cb.rx_byte) {
                     bool is_end = eoi || (ieee488_device.cfg.eos_enabled && b == ieee488_device.cfg.eos_byte);
-                    ieee488_device.cb.rx_byte(ieee488_device.cb.ctx, b, is_end);
+                    ieee488_device.cb.rx_byte(b, is_end);
                 }
                 ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
                     if (ieee488_device.restart_loop) return;
@@ -446,12 +446,13 @@ static void source(bool atn) {
             if (ieee488_device.restart_loop) return;
             if (!ieee488_device.tx_loaded) {
                 if (ieee488_device.talker == IEEE488_T_SPAS) {
-                    uint8_t s = ieee488_device.cb.status_byte ? ieee488_device.cb.status_byte(ieee488_device.cb.ctx) : 0;
+                    uint8_t s = ieee488_device.cb.status_byte ? ieee488_device.cb.status_byte() : 0;
                     ieee488_device.tx_byte = (uint8_t)((s & 0xBFu) | ((ieee488_device.sr == IEEE488_SR_APRS) ? 0x40u : 0));
                     ieee488_device.tx_end = true;
                     ieee488_device.tx_loaded = true;
                 } else if (ieee488_device.cb.tx_next)
-                    ieee488_device.tx_loaded = ieee488_device.cb.tx_next(ieee488_device.cb.ctx, &ieee488_device.tx_byte, &ieee488_device.tx_end);
+                    // TODO add delay section here based on ieee488_device.cfg.tx_delay_us if > 0
+                    ieee488_device.tx_loaded = ieee488_device.cb.tx_next(&ieee488_device.tx_byte, &ieee488_device.tx_end);
             }
             if (ieee488_device.tx_loaded) {
                 if (ieee488_device.restart_loop) return;
@@ -739,7 +740,7 @@ void ieee488_poll(void) {
         }
         if (addressed != ieee488_device.last_addressed) {
             ieee488_device.last_addressed = addressed;
-            ieee488_device.cb.addressed_changed(ieee488_device.cb.ctx, addressed);
+            ieee488_device.cb.addressed_changed(addressed);
         }
     }
 }

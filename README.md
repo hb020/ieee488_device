@@ -1,6 +1,6 @@
 # IEEE-488.1 (GPIB) device library
 
-Portable gnu11 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
+Portable gnu-11 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
 
 This can be used to create:
 
@@ -133,7 +133,44 @@ If you want to move to a better chain, you WILL want to use 'real' atomic variab
 - The implementation supports both normal and extended addressing, selected at runtime. A particular product should advertise only its actual subset.
 - `TCT` is recognized but ignored because the Controller capability is excluded.
 
-## Build
+# IEEE-488.1 SCPI test commands
+
+> This is WIP
+
+The built-in SCPI interpreter is a basic interpreter, meant only for IEEE-488.1 compliance tests for gateways (and client software). It does not support command chaining, and does not support the full mandatory IEEE-488.2 command set.
+
+- `*IDN?` replies with `Bateau,ieee488_device,{GPIB address},{software version}`, where
+  - `{GPIB address}` is the address on the bus, with ':' separator, like `5:1`
+  - `{software version}` is the software version, like `0.9`
+- `SYSTEM:ERROR?` replies with any error. As usual.
+- `*CLS`
+- `*RST`
+- `LONGWR? {ASCII data}` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START}`, where
+  - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E.
+  - `{LEN}` is the length of data received
+  - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
+- `LONGRD? {LEN} {START}` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E, where
+  - `{LEN}` is the length of the data to send
+  - `{START}` is the decimal code of the starting character
+- `SLOWWR {USECS}` Adds an arbitrary time before acknowledging any received byte, where
+  - `{USECS}` is the delay time in microseconds. 0 to disable.
+- `SLOWRD {USECS}` Adds an arbitrary delay time before transmitting any byte, where
+  - `{USECS}` is the delay time in seconds
+- `DELAYRD {SECS}` Adds an arbitrary delay time before transmitting a reply, where
+  - `{SECS}` is the delay time in seconds
+- `SLOWWR?` Returns the value (in decimal) of the time set by `SLOWWR`
+- `SLOWRD?` Returns the value (in decimal) of the time set by `SLOWRD`
+- `DELAYRD?` Returns the value (in decimal) of the time set by `DELAYRD`
+- `SRQ [{DELAY}]` for the activation of SRQ, after an optional delay, where
+  - `{SECS}` is the delay time in seconds. The delay will not be reset by other commands, so you can time the SRQ to arrive during a communication.
+- `ADDR {ADDRESS}[,{SEC}]` set the address, where
+  - `{ADDRESS}` is the primary address
+  - `{SEC}` is the secondary address
+- `EOS {TERMCHAR}` sets the terminating character, where
+  - `{TERMCHAR}` is the decimal value of the terminating character. If 0, EOS is disabled, and EOI is used.
+- `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`. See above.
+
+# Build
 
 Via platformio.
 
