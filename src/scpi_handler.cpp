@@ -67,6 +67,10 @@ void restart_out(void) {
     scpi_out_from_buffer = true;
 }
 
+char endchar(void) {
+    return cfg.eos_enabled ? (char)cfg.eos_byte : '\n';
+}
+
 /*
  * The SCPI command set is defined here.
  * Each command has a string and a handler function.
@@ -91,7 +95,7 @@ static scpi_in_state_t idn_handler(bool end) {
     } else {
         sprintf(address, "%d", cfg.primary_address);
     }
-    sprintf(out_buffer, "Bateau,ieee488_device,%s,1.0\n", address);
+    sprintf(out_buffer, "Bateau,ieee488_device,%s,1.0%c", address, endchar());
     return SCPI_FLUSH;
 }
 
@@ -102,19 +106,19 @@ static scpi_in_state_t err_handler(bool end) {
     restart_out();
     switch (scpi_error_state) {
         case SCPI_NONE:
-            sprintf(out_buffer, "0,\"No error\"\n");
+            sprintf(out_buffer, "0,\"No error\"%c", endchar());
             break;
         case SCPI_SYNTAX:
-            sprintf(out_buffer, "-100,\"Syntax error\"\n");
+            sprintf(out_buffer, "-100,\"Syntax error\"%c", endchar());
             break;
         case SCPI_PARAMETER:
-            sprintf(out_buffer, "-200,\"Parameter error\"\n");
+            sprintf(out_buffer, "-200,\"Parameter error\"%c", endchar());
             break;
         case SCPI_OVERFLOW:
-            sprintf(out_buffer, "-300,\"Overflow error\"\n");
+            sprintf(out_buffer, "-300,\"Overflow error\"%c", endchar());
             break;
         default:
-            sprintf(out_buffer, "-999,\"Unknown error\"\n");
+            sprintf(out_buffer, "-999,\"Unknown error\"%c", endchar());
             break;
     }
     scpi_error_state = SCPI_NONE;  // Clear the error state after reporting
@@ -197,7 +201,7 @@ static scpi_in_state_t delayrd_handler(bool end) {
 static scpi_in_state_t slowwrq_handler(bool end) {
     // This is a placeholder for the SLOWWR? command handler.
     restart_out();
-    sprintf(out_buffer, "%lu\n", cfg.rx_delay_us);
+    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.rx_delay_us, endchar());
     return SCPI_FLUSH;
 }
 
@@ -205,7 +209,7 @@ static scpi_in_state_t slowwrq_handler(bool end) {
 static scpi_in_state_t slowrdq_handler(bool end) {
     // This is a placeholder for the SLOWRD? command handler.
     restart_out();
-    sprintf(out_buffer, "%lu\n", cfg.tx_delay_us);
+    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.tx_delay_us, endchar());
     return SCPI_FLUSH;
 }
 
@@ -213,7 +217,7 @@ static scpi_in_state_t slowrdq_handler(bool end) {
 static scpi_in_state_t delayrdq_handler(bool end) {
     // This is a placeholder for the DELAYRD? command handler.
     restart_out();
-    sprintf(out_buffer, "%lu\n", cfg.reply_delay_s);
+    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.reply_delay_s, endchar());
     return SCPI_FLUSH;
 }
 

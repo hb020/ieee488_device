@@ -139,22 +139,24 @@ If you want to move to a better chain, you WILL want to use 'real' atomic variab
 
 The built-in SCPI interpreter is a basic interpreter, meant only for IEEE-488.1 compliance tests for gateways (and client software). It does not support command chaining, and does not support the full mandatory IEEE-488.2 command set.
 
+The supported commands are:
+
 - `*IDN?` replies with `Bateau,ieee488_device,{GPIB address},{software version}`, where
-  - `{GPIB address}` is the address on the bus, with ':' separator, like `5:1`
+  - `{GPIB address}` is the address on the bus, potentially with ':' separator for secondary address, like `5:1`
   - `{software version}` is the software version, like `0.9`
-- `SYSTEM:ERROR?` replies with any error. As usual.
+- `:SYSTEM:ERROR?` replies with the last error. As usual.
 - `*CLS`
 - `*RST`
 - `LONGWR? {ASCII data}` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START}`, where
-  - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E.
+  - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E (looping).
   - `{LEN}` is the length of data received
   - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
-- `LONGRD? {LEN} {START}` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E, where
+- `LONGRD? {LEN} {START}` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E (looping), where
   - `{LEN}` is the length of the data to send
   - `{START}` is the decimal code of the starting character
-- `SLOWWR {USECS}` Adds an arbitrary time before acknowledging any received byte, where
+- `SLOWWR {USECS}` Adds an arbitrary time before acknowledging any received data byte, where
   - `{USECS}` is the delay time in microseconds. 0 to disable.
-- `SLOWRD {USECS}` Adds an arbitrary delay time before transmitting any byte, where
+- `SLOWRD {USECS}` Adds an arbitrary delay time before transmitting any data byte, where
   - `{USECS}` is the delay time in seconds
 - `DELAYRD {SECS}` Adds an arbitrary delay time before transmitting a reply, where
   - `{SECS}` is the delay time in seconds
@@ -167,8 +169,10 @@ The built-in SCPI interpreter is a basic interpreter, meant only for IEEE-488.1 
   - `{ADDRESS}` is the primary address
   - `{SEC}` is the secondary address
 - `EOS {TERMCHAR}` sets the terminating character, where
-  - `{TERMCHAR}` is the decimal value of the terminating character. If 0, EOS is disabled, and EOI is used.
+  - `{TERMCHAR}` is the decimal value of the terminating character. If set, it is used for both in- and outgoing communication. If 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
 - `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`. See above.
+
+Note that `EOS` and `EOI` made to be mutually exclusive in this device. So 'end of command' is either based on EOS, either on EOI. End of command is not automatically detected from CR/LF, CR, LF, or ';', on purpose. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with LF, as is the custom.
 
 # Build
 

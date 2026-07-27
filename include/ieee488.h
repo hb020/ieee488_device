@@ -88,9 +88,9 @@ typedef struct {
     uint32_t handshake_timeout_us;        // T3 handshake timeout us, 0 = no software timeout
     uint32_t t1_delay_us;                 // T1 source settling delay; see 2.3 and 3.8
     uint8_t pp_line;                      // The DIO line to use for parallel poll local (1-8). 0 for 'not configured'.
-    uint16_t rx_delay_us;                 // Delay in microseconds between receiving bytes. 0 for no delay.
-    uint16_t tx_delay_us;                 // Delay in microseconds between transmitting bytes. 0 for no delay.
-    uint16_t reply_delay_s;               // Delay in seconds before sending a reply. 0 for no delay. This is handled outside of the ieee488 code.   
+    uint32_t rx_delay_us;                 // Delay in microseconds between receiving bytes. 0 for no delay.
+    uint32_t tx_delay_us;                 // Delay in microseconds between transmitting bytes. 0 for no delay.
+    uint32_t reply_delay_s;               // Delay in seconds before sending a reply. 0 for no delay. This is handled outside of the ieee488 code.   
 } ieee488_config_t;
 
 /** @brief Callbacks for an IEEE 488.1-1987 device.
