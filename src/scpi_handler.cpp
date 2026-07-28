@@ -46,7 +46,7 @@ static bool scpi_out_from_buffer = true;
 
 struct scpi_command {
     const char* command;
-    scpi_in_state_t (*handler)(bool end);
+    scpi_in_state_t (*handler)(uint8_t byte, bool end);
 };
 
 // The index of the command being handled.
@@ -54,6 +54,7 @@ struct scpi_command {
 // 255 means no command recognized yet.
 static uint8_t scpi_command_idx = 255;
 
+/** @brief Restart the input buffer and state machine. */
 void restart_in(void) {
     memset(in_buffer, 0, sizeof(in_buffer));
     in_counter = 0;
@@ -61,14 +62,52 @@ void restart_in(void) {
     scpi_in_state = SCPI_IDLE;
 }
 
+/** @brief Restart the output buffer and state machine. */
 void restart_out(void) {
     memset(out_buffer, 0, sizeof(out_buffer));
     out_counter = 0;
     scpi_out_from_buffer = true;
 }
 
+/** @brief Get the end character for SCPI messages. 
+ * @return The end character, either the EOS byte if enabled, or '\n' if not.
+*/
 char endchar(void) {
     return cfg.eos_enabled ? (char)cfg.eos_byte : '\n';
+}
+
+/** @brief Parse a string of space separated uint32_t integers from in_buffer and fill the values array.
+ * 
+ * The values are expected to be in decimal format, separated by whitespace.
+ * The first word in the string is to be ignored. 
+ * in_buffer has no leading whitespace, but can have trailing whitespace 
+ * and multiple spaces between the values.
+ * 
+ * @param values Pointer to an array of uint32_t to be filled with the parsed values
+ * @param num_values The number of values to parse and fill in the values array
+ * @return the number of values read
+ */
+int get_uint32_varvalues(uint32_t* values, size_t num_values) {
+    const char* ptr = in_buffer;
+    int values_found = 0;
+    if (!values) return 0;
+    // Skip the first word
+    char* endptr;
+    ptr = strchr(ptr, ' ');
+    if (!ptr) return 0;
+    while (*ptr && isspace(*ptr)) ptr++;  // Skip whitespace
+
+    while (*ptr && values_found < num_values) {
+        values[values_found++] = strtoul(ptr, &endptr, 10);
+        if (ptr == endptr) {
+            // No conversion performed
+            return values_found - 1;  // Return the number of values found so far
+        }
+        ptr = endptr;
+        while (*ptr && isspace(*ptr)) ptr++;  // Skip whitespace
+    }
+
+    return values_found;
 }
 
 /*
@@ -85,9 +124,11 @@ char endchar(void) {
  */
 
 /* `*IDN?` */
-static scpi_in_state_t idn_handler(bool end) {
+static scpi_in_state_t idn_handler(uint8_t byte, bool end) {
     // This is a placeholder for the *IDN? command handler.
     // It should return the identification string of the device.
+    (void)byte;  // Unused parameter
+    (void)end;   // Unused parameter
     restart_out();
     char address[16];
     if (cfg.extended_address) {
@@ -100,9 +141,11 @@ static scpi_in_state_t idn_handler(bool end) {
 }
 
 /* `SYSTem:ERRor?` */
-static scpi_in_state_t err_handler(bool end) {
+static scpi_in_state_t err_handler(uint8_t byte, bool end) {
     // This is a placeholder for the :SYST:ERR? command handler.
     // It should return the last error message of the device.
+    (void)byte;  // Unused parameter
+    (void)end;   // Unused parameter
     restart_out();
     switch (scpi_error_state) {
         case SCPI_NONE:
@@ -126,9 +169,11 @@ static scpi_in_state_t err_handler(bool end) {
 }
 
 /* `*CLS` */
-static scpi_in_state_t cls_handler(bool end) {
+static scpi_in_state_t cls_handler(uint8_t byte, bool end) {
     // This is a placeholder for the *CLS command handler.
     // It should clear the error queue of the device.
+    (void)byte;  // Unused parameter
+    (void)end;   // Unused parameter
     scpi_error_state = SCPI_NONE;  // Clear the error state
     restart_in();  // Clear the input buffer
     restart_out(); // Clear the output buffer
@@ -136,88 +181,193 @@ static scpi_in_state_t cls_handler(bool end) {
 }
 
 /* `LONGWR? {ASCII data}` */
-static scpi_in_state_t longwr_handler(bool end) {
+static scpi_in_state_t longwr_handler(uint8_t byte, bool end) {
     // This is a placeholder for the LONGWR command handler.
     // It should set the device to long write mode.
+    (void)byte;  // Unused parameter
+    (void)end;   // Unused parameter
+
+    if (!end) return SCPI_STREAM;  // Enter stream mode to receive the ASCII data
     return SCPI_FLUSH;
 }
 
 /* `LONGRD? {LEN} {START}` */
-static scpi_in_state_t longrd_handler(bool end) {
+static scpi_in_state_t longrd_handler(uint8_t byte, bool end) {    
     // This is a placeholder for the LONGRD command handler.
     // It should set the device to long read mode.
+    (void)byte;  // Unused parameter
+
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+    // Parse the parameter from the input buffer
+    uint32_t value[2];
+    if (get_uint32_varvalues(value, 2) != 2) {
+        scpi_error_state = SCPI_SYNTAX;
+        return SCPI_FLUSH;
+    }
+    // start char is OK?
+    if (value[1] < 48 ||  value[1] > 126) {
+        scpi_error_state = SCPI_PARAMETER;
+        return SCPI_FLUSH;
+    }
+
+    // TODO handle the long read with value[0] as LEN and value[1] as START
+
     return SCPI_FLUSH;
 }
 
 /* `SLOWWR {USECS}` */
-static scpi_in_state_t slowwr_handler(bool end) {
+static scpi_in_state_t slowwr_handler(uint8_t byte, bool end) {
     // This is a placeholder for the SLOWWR command handler.
     // It should set the device to slow write mode.
+    (void)byte;  // Unused parameter
+
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
     // Parse the parameter from the input buffer
-    char* param_start = strchr(in_buffer, ' ');
-    if (!param_start) {
+    uint32_t value;
+    if (get_uint32_varvalues(&value, 1) != 1) {
         scpi_error_state = SCPI_SYNTAX;
         return SCPI_FLUSH;
     }
-    param_start++;  // Move past the space
-    cfg.rx_delay_us = strtoul(param_start, NULL, 10);
+    cfg.rx_delay_us = value;
     return SCPI_FLUSH;
 }
 
 /* `SLOWRD {USECS}` */
-static scpi_in_state_t slowrd_handler(bool end) {
+static scpi_in_state_t slowrd_handler(uint8_t byte, bool end) {
     // This is a placeholder for the SLOWRD command handler.
     // It should set the device to slow read mode.
+    (void)byte;  // Unused parameter
+
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
-    // Parse the parameter from the input buffer
-    char* param_start = strchr(in_buffer, ' ');
-    if (!param_start) {
+    uint32_t value;
+    if (get_uint32_varvalues(&value, 1) != 1) {
         scpi_error_state = SCPI_SYNTAX;
         return SCPI_FLUSH;
     }
-    param_start++;  // Move past the space
-    cfg.tx_delay_us = strtoul(param_start, NULL, 10);
+    cfg.tx_delay_us = value;
     return SCPI_FLUSH;
 }
 
 /* `DELAYRD {SECS}` */
-static scpi_in_state_t delayrd_handler(bool end) {
+static scpi_in_state_t delayrd_handler(uint8_t byte, bool end) {
     // This is a placeholder for the DELAYRD command handler.
     // It should set the device to delay read mode.
+    (void)byte;  // Unused parameter
+
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
     // Parse the parameter from the input buffer
-    char* param_start = strchr(in_buffer, ' ');
-    if (!param_start) {
+    uint32_t value;
+    if (get_uint32_varvalues(&value, 1) != 1) {
         scpi_error_state = SCPI_SYNTAX;
         return SCPI_FLUSH;
     }
-    param_start++;  // Move past the space
-    cfg.reply_delay_s = strtoul(param_start, NULL, 10);
+    cfg.reply_delay_s = value;
     return SCPI_FLUSH;
 }
 
 /* `SLOWWR?` */
-static scpi_in_state_t slowwrq_handler(bool end) {
+static scpi_in_state_t slowwrq_handler(uint8_t byte, bool end) {
     // This is a placeholder for the SLOWWR? command handler.
+    (void)byte;  // Unused parameter
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+
     restart_out();
     sprintf(out_buffer, "%lu%c", (unsigned long)cfg.rx_delay_us, endchar());
     return SCPI_FLUSH;
 }
 
 /* `SLOWRD?` */
-static scpi_in_state_t slowrdq_handler(bool end) {
+static scpi_in_state_t slowrdq_handler(uint8_t byte, bool end) {
     // This is a placeholder for the SLOWRD? command handler.
+    (void)byte;  // Unused parameter
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+
     restart_out();
     sprintf(out_buffer, "%lu%c", (unsigned long)cfg.tx_delay_us, endchar());
     return SCPI_FLUSH;
 }
 
 /* `DELAYRD?` */
-static scpi_in_state_t delayrdq_handler(bool end) {
+static scpi_in_state_t delayrdq_handler(uint8_t byte, bool end) {
     // This is a placeholder for the DELAYRD? command handler.
+    (void)byte;  // Unused parameter
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+
     restart_out();
     sprintf(out_buffer, "%lu%c", (unsigned long)cfg.reply_delay_s, endchar());
+    return SCPI_FLUSH;
+}
+
+/* `SRQ [{DELAY}]` */
+static scpi_in_state_t srq_handler(uint8_t byte, bool end) {
+    (void)byte;  // Unused parameter
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+    
+    uint32_t value;
+    if (get_uint32_varvalues(&value, 1) != 1) {
+        value = 0;  // Default to 0 if no parameter is provided
+    }
+    // TODO handle the SRQ with value as DELAY
+    return SCPI_FLUSH;
+}
+
+/* `ADDR {PRIMARY} [{SECONDARY}]` */
+static scpi_in_state_t addr_handler(uint8_t byte, bool end) {
+    (void)byte;  // Unused parameter
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+    
+    uint32_t value[2];
+    int num_values = get_uint32_varvalues(value, 2);
+    if (num_values < 1) {
+        scpi_error_state = SCPI_PARAMETER;
+        return SCPI_FLUSH;
+    }
+    if (value[0] > 30 || (num_values == 2 && value[1] > 30)) {
+        scpi_error_state = SCPI_PARAMETER;
+        return SCPI_FLUSH;
+    }
+    cfg.primary_address = (uint8_t)value[0];
+    if (num_values == 2) {
+        cfg.extended_address = true;
+        cfg.secondary_address = (uint8_t)value[1];
+    } else {
+        cfg.extended_address = false;
+    }
+    return SCPI_FLUSH;
+}
+
+/* `EOS [{TERMCHAR}]` */
+static scpi_in_state_t eos_handler(uint8_t byte, bool end) {
+    (void)byte;  // Unused parameter
+    if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
+    
+    uint32_t value;
+    if (get_uint32_varvalues(&value, 1) != 1) {
+        value = 0;  // Default to 0 if no parameter is provided
+    }
+    if (value == 0) {
+        cfg.eos_enabled = false;
+    } else if (value >= 1 && value <= 255) {
+        cfg.eos_enabled = true;
+        cfg.eos_byte = (uint8_t)value;
+    } else {
+        scpi_error_state = SCPI_PARAMETER;
+    }
+    return SCPI_FLUSH;
+}
+
+/* `EOS?` */
+static scpi_in_state_t eosq_handler(uint8_t byte, bool end) {
+    (void)byte;  // Unused parameter
+    (void)end;   // Unused parameter
+    // This is a placeholder for the EOS? command handler.
+    // It should return the current end-of-string setting.
+    restart_out();
+    if (cfg.eos_enabled) {
+        sprintf(out_buffer, "%u%c", (unsigned int)cfg.eos_byte, endchar());
+    } else {
+        sprintf(out_buffer, "0%c", endchar());
+    }
     return SCPI_FLUSH;
 }
 
@@ -237,86 +387,110 @@ static scpi_command scpi_commands[] = {
     {"SLOWWR?", slowwrq_handler},
     {"SLOWRD?", slowrdq_handler},
     {"DELAYRD?", delayrdq_handler},
-    {"SRQ", nullptr},
-    {"ADDR", nullptr},
-    {"EOS", nullptr},
-    {"EOS?", nullptr},
+    {"SRQ", srq_handler},
+    {"ADDR", addr_handler},
+    {"EOS", eos_handler},
+    {"EOS?", eosq_handler},
 };
 
-/** @brief Handle a received byte.
+/** @brief Handle a received byte to be used in a command.
  * @param byte The received byte.
  * @param end True if this is the last byte of the message, false otherwise.
  */
 void read_command(uint8_t byte, bool end) {
-    if (scpi_in_state == SCPI_FLUSH) {
-        // If we are in flush state, ignore all input until the next command
-        return;
-    }
-    if (in_counter >= sizeof(in_buffer) - 1) {
-        // Buffer overflow, silently flush
-        scpi_error_state = SCPI_OVERFLOW;
-        scpi_in_state = SCPI_FLUSH;
-        return;
-    }
-    if (scpi_in_state == SCPI_IDLE && isspace(byte)) {
-        // Ignore leading whitespace
-        return;
-    }
-
-    if (scpi_in_state == SCPI_IDLE) {
-        scpi_in_state = SCPI_RECEIVING_COMMAND;
-    }
-
-    // Not in idle state, store the byte in the input buffer
-    in_buffer[in_counter++] = (char)byte;
-
-    if (scpi_in_state == SCPI_RECEIVING_COMMAND) {
-        if (end || (byte == ' ')) {
-            // The command is complete, process it
-
-            in_buffer[in_counter] = '\0';  // Null-terminate the string
-            // Remove trailing whitespace for the comparison
-            size_t len = strlen(in_buffer);
-            while (len > 0 && isspace(in_buffer[len - 1])) {
-                len--;
-            }
-            // compare with all known commands
-            for (size_t i = 0; i < sizeof(scpi_commands) / sizeof(scpi_commands[0]); i++) {
-                struct scpi_command cmd = scpi_commands[i];
-                if (strncasecmp(in_buffer, cmd.command, len) == 0) {
-                    // Command recognized, call the handler if it exists
-                    if (cmd.handler) {
-                        scpi_in_state = cmd.handler(end);
-                        scpi_command_idx = i;  // Store the index of the command, for later use in SCPI_FINISHING_COMMAND or SCPI_STREAM state
-                    } else {
-                        scpi_in_state = SCPI_FLUSH;  // No handler, flush the input
-                    }
-                    if (end) {
-                        restart_in();  // Clear the input buffer after processing
-                    }
-                    return;
-                }
-            }
-            // nothing found: error
-            scpi_error_state = SCPI_SYNTAX;
+    // store the byte in the input buffer if we are in receiving or finishing command state
+    if (scpi_in_state == SCPI_RECEIVING_COMMAND || scpi_in_state == SCPI_FINISHING_COMMAND) {
+        if (in_counter >= sizeof(in_buffer) - 1) {
+            // Buffer overflow, silently flush
+            scpi_error_state = SCPI_OVERFLOW;
             scpi_in_state = SCPI_FLUSH;
             return;
         }
+        // Not in idle state, store the byte in the input buffer
+        in_buffer[in_counter++] = (char)byte;
+        // and continue to process the byte in the state machine below
     }
-    if (scpi_in_state == SCPI_FINISHING_COMMAND) {
-        // We are waiting for the end of the command
-        if (end) {
-            // Call the handler again to finish processing
-            if (scpi_command_idx < sizeof(scpi_commands) / sizeof(scpi_commands[0])) {
-                struct scpi_command cmd = scpi_commands[scpi_command_idx];
-                if (cmd.handler) {
-                    cmd.handler(end);
-                }
+
+    switch (scpi_in_state) {
+        case SCPI_IDLE:
+            // In idle state, we are waiting for the first byte of a command
+            if (isspace(byte)) {
+                // Ignore leading whitespace
+                return;
             }
-            scpi_in_state = SCPI_IDLE;
-        }
+            // if not: fall through to receiving command state
+            scpi_in_state = SCPI_RECEIVING_COMMAND;
+        case SCPI_RECEIVING_COMMAND:
+            // In receiving command state, we are collecting bytes for the command
+            // handle the byte if it is the end of the command or a whitespace
+            if (end || (byte == ' ')) {
+                // The command is complete, process it
+
+                in_buffer[in_counter] = '\0';  // Null-terminate the string
+                // Remove trailing whitespace for the comparison
+                size_t len = strlen(in_buffer);
+                while (len > 0 && isspace(in_buffer[len - 1])) {
+                    len--;
+                }
+                // compare with all known commands
+                for (size_t i = 0; i < sizeof(scpi_commands) / sizeof(scpi_commands[0]); i++) {
+                    struct scpi_command cmd = scpi_commands[i];
+                    if (strncasecmp(in_buffer, cmd.command, len) == 0) {
+                        // Command recognized, call the handler if it exists
+                        if (cmd.handler) {
+                            scpi_in_state = cmd.handler(byte, end);
+                            scpi_command_idx = i;  // Store the index of the command, for later use in SCPI_FINISHING_COMMAND or SCPI_STREAM state
+                        } else {
+                            scpi_in_state = SCPI_FLUSH;  // No handler, flush the input
+                        }
+                        if (end) {
+                            restart_in();  // Clear the input buffer after processing
+                        }
+                        return;
+                    }
+                }
+                // nothing found: error
+                scpi_error_state = SCPI_SYNTAX;
+                scpi_in_state = SCPI_FLUSH;
+                return;
+            }
+            break;
+        case SCPI_FINISHING_COMMAND:
+            // In finishing command state, we are waiting for the end of the command
+
+            // We are waiting for the end of the command
+            if (end) {
+                // Call the handler again to finish processing
+                if (scpi_command_idx < sizeof(scpi_commands) / sizeof(scpi_commands[0])) {
+                    struct scpi_command cmd = scpi_commands[scpi_command_idx];
+                    if (cmd.handler) {
+                        cmd.handler(byte, end);
+                    }
+                }
+                scpi_in_state = SCPI_IDLE;
+            }
+            break;
+        case SCPI_STREAM:
+            // In stream state, we are ignoring all input until the end of the message
+
+            break;
+        case SCPI_FLUSH:
+            // In flush state, we are ignoring all input until the next command
+            break;
     }
     return;
+}
+
+/** @brief Handle a received byte from an input stream.
+ * @param byte The received byte.
+ * @param end True if this is the last byte of the message, false otherwise.
+ */
+void read_stream(uint8_t byte, bool end) {
+    if (scpi_in_state != SCPI_STREAM) {
+        // Not in stream mode, ignore the byte
+        return;
+    }
+
 }
 
 /** The callbacks from the IEEE-488 interface */
@@ -336,6 +510,7 @@ bool device_tx(uint8_t* byte, bool* end) {
     uint8_t ch = 0;
     if (out_counter >= sizeof(out_buffer) - 1) {
         // all sent
+        *end = true;
         return false;
     }
     *byte = (uint8_t)out_buffer[out_counter++];
@@ -361,28 +536,14 @@ void device_rx(uint8_t byte, bool end) {
     }
     if (end) Serial.print(" END");
     Serial.println();
-
-    switch (scpi_in_state) {
-        case SCPI_IDLE:
-        case SCPI_RECEIVING_COMMAND:
-        case SCPI_FINISHING_COMMAND:
-            read_command(byte, end);
-            break;
-        case SCPI_STREAM:
-            // in stream mode, we can just pass the byte to the stream handler
-            // TODO
-            break;
-        default:
-            // ignore input until flush is done
-            break;
-    }
+    read_command(byte, end);
     if (end) {
         restart_in();
     }
 }
 
 void device_clear(bool selected) {
-    cls_handler(true);
+    cls_handler(0, true);
     Serial.print(selected ? "selected" : "universal");
     Serial.println(" clear");
 }

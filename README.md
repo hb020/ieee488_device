@@ -153,7 +153,7 @@ The supported commands are:
   - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
 - `LONGRD? {LEN} {START}` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E (looping), where
   - `{LEN}` is the length of the data to send
-  - `{START}` is the decimal code of the starting character
+  - `{START}` is the decimal code of the starting character (48-126)
 - `SLOWWR {USECS}` Adds an arbitrary time before acknowledging any received data byte, where
   - `{USECS}` is the delay time in microseconds. 0 to disable.
 - `SLOWRD {USECS}` Adds an arbitrary delay time before transmitting any data byte, where
@@ -165,12 +165,12 @@ The supported commands are:
 - `DELAYRD?` Returns the value (in decimal) of the time set by `DELAYRD`
 - `SRQ [{DELAY}]` for the activation of SRQ, after an optional delay, where
   - `{SECS}` is the delay time in seconds. The delay will not be reset by other commands, so you can time the SRQ to arrive during a communication.
-- `ADDR {ADDRESS}[,{SEC}]` set the address, where
-  - `{ADDRESS}` is the primary address
-  - `{SEC}` is the secondary address
-- `EOS {TERMCHAR}` sets the terminating character, where
-  - `{TERMCHAR}` is the decimal value of the terminating character. If set, it is used for both in- and outgoing communication. If 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
-- `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`. See above.
+- `ADDR {PRIMARY} [{SECONDARY}]` set the address, where
+  - `{PRIMARY}` is the primary address (0-30)
+  - `{SECONDARY}` is the secondary address (0-30)
+- `EOS [{TERMCHAR}]` sets the terminating character, where
+  - `{TERMCHAR}` is the decimal value of the terminating character. If set, it is used for both in- and outgoing communication. If not given or 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
+- `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or 0 when EOS is disabled. See above.
 
 Note that `EOS` and `EOI` made to be mutually exclusive in this device. So 'end of command' is either based on EOS, either on EOI. End of command is not automatically detected from CR/LF, CR, LF, or ';', on purpose. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with LF, as is the custom.
 
