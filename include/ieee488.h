@@ -262,7 +262,7 @@ void ieee488_request_service(bool request);
  */
 void ieee488_return_to_local(void);
 
-/** @brief Set the individual status of the device.
+/** @brief Set the individual status of the device, for PPOLL.
  * @param ist The individual status value.
  */
 void ieee488_set_individual_status(bool ist);

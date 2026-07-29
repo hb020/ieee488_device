@@ -3,40 +3,9 @@
 #include "config.h"
 #include "ieee488.h"
 #include "ieee488_hal.h"
-#include "scpi_handler.h"
+#include "testdevice.h"
 
 int debug_level = DEFAULT_DEBUG_LEVEL;
-
-/** @brief Handle a change in the remote/local status. (RL1)
- * @param remote True if the device is now in remote mode, false if in local mode.
- * @param lockout True if the device is now in lockout state, false otherwise.
- */
-static void remote_changed(bool remote, bool lockout) {
-    (void)lockout;
-    if (remote) {
-        digitalWrite(LED_R, LOW);
-        digitalWrite(LED_G, HIGH);
-    } else {
-        digitalWrite(LED_G, LOW);
-        digitalWrite(LED_R, HIGH);
-    }
-    if (debug_level > 1) {
-        Serial.print(remote ? "Remote" : "Local");
-        Serial.print(lockout ? " lockout" : "");
-        Serial.println();
-    }
-}
-
-/** @brief Handle a change in the addressed status.
- * @param addressed True if the device is now addressed, false otherwise.
- */
-static void addressed_changed(bool addressed) {
-    digitalWrite(LED_B, addressed ? LOW : HIGH);
-    if (debug_level > 1) {
-        Serial.print(addressed ? "Addressed" : "Unaddressed");
-        Serial.println();
-    }
-}
 
 static void print_nr(uint8_t b) {
     b = b & 0x1fu;

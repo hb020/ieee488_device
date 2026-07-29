@@ -23,17 +23,29 @@ static __attribute__((always_inline)) uint32_t now_ms(void) { return TIME_MS(); 
 // If the handshake operation does not complete by this time, the device will consider the
 // handshake to have failed and will take appropriate action (e.g., aborting the operation, signaling an error, etc.).
 
-/** @brief Check if the handshake timer has expired.
+/** @brief Check if the T3 handshake timer has expired.
  *
- * @return true if the handshake timer has expired, false otherwise.
+ * @return true if the T3 handshake timer has expired, false otherwise.
  */
 static __attribute__((always_inline)) bool expired_handshake(void) { return ieee488_device.cfg->handshake_timeout_us && (int32_t)(now_us() - ieee488_device.handshake_deadline) >= 0; }
 
-/** @brief Arm the handshake timer with the configured timeout.
+/** @brief Arm the T3 handshake timer with the configured timeout.
  *
  * To be used with the expired_handshake() function to check for handshake timeouts.
  */
 static __attribute__((always_inline)) void arm_handshake(void) { ieee488_device.handshake_deadline = now_us() + ieee488_device.cfg->handshake_timeout_us; }
+
+/** @brief Check if the T1 settling time for multiline messages timer has expired.
+ *
+ * @return true if the T1 settling time for multiline messages timer has expired, false otherwise.
+ */
+static __attribute__((always_inline)) bool expired_T1(void) { return ((uint32_t)(now_us() - ieee488_device.state_since) >= ieee488_device.cfg->t1_delay_us); }
+
+/** @brief Arm the T1 settling time for multiline messages timer with the configured timeout.
+ *
+ * To be used with the expired_T1() function to check for T1 timeouts.
+ */
+static __attribute__((always_inline)) void arm_T1(void) { ieee488_device.state_since = now_us(); }
 
 /** @brief Check if the given byte matches the device's primary address for listen.
  *
@@ -104,6 +116,9 @@ static __attribute__((always_inline)) void decode_command(uint8_t b) {
         ieee488_device.serial_poll_mode = false;
         ieee488_device.talker = IEEE488_T_TIDS;
         ieee488_device.talk_primary_addressed = false;
+        /* SR2.7.3.4: leaving serial poll clears any latched service request state. */
+        ieee488_device.sr = IEEE488_SR_NPRS;
+        ieee488_device.service_pending = false;
     }
     if (ieee488_device.serial_poll_mode && ((b & 0x60u) == 0x40u) && !mta(b)) {
         ieee488_device.listener = IEEE488_L_LIDS;
@@ -255,7 +270,7 @@ void ieee488_return_to_local(void) {
         set_rl(IEEE488_RL_LOCS);
 }
 
-/** @brief Set the individual status flag.
+/** @brief Set the individual status flag, for PPOLL.
  *
  * @param v The value to set.
  */
@@ -406,13 +421,16 @@ static void acceptor(bool atn) {
  * @param drop_tx true to drop the current transmit byte, false to keep it.
  */
 static __attribute__((always_inline)) void source_force_idle_raw(bool drop_tx, bool idy) {
+    /* If we were already in SWNS with NDAC asserted, the byte handshake completed. */
+    bool completed_tx = (ieee488_device.sh == IEEE488_SH_SWNS) && NDAC_IS_ASSERTED();
+
     DAV_RELEASE();
     EOI_RELEASE();
     if (!idy) {
         DRIVE_DIO(0, false);
     }
     ieee488_device.sh = IEEE488_SH_SIDS;
-    if (drop_tx) ieee488_device.tx_loaded = false;
+    if (drop_tx || completed_tx) ieee488_device.tx_loaded = false;
 }
 
 /** @brief Force the source to the idle state: DAV and EOI unasserted, DIO lines low, and source state machine reset.
@@ -448,7 +466,8 @@ static void source(bool atn) {
 
     bool active = !atn && (talker == IEEE488_T_TACS || talker == IEEE488_T_SPAS);
     if (!active) {
-        source_force_idle(true);
+        /* Abort bus driving, but keep a preloaded byte so it can be retried when re-addressed to talk. */
+        source_force_idle(false);
         return;
     }
     switch (sh) {
@@ -474,7 +493,7 @@ static void source(bool atn) {
                     } else {
                         EOI_RELEASE();
                     }
-                    ieee488_device.state_since = now_us();
+                    arm_T1();
                     ieee488_device.sh = IEEE488_SH_SDYS;
                     arm_handshake();
                 }
@@ -483,7 +502,7 @@ static void source(bool atn) {
 
         case IEEE488_SH_SDYS:
             if (ieee488_device.restart_loop) return;
-            if (!nrfd && (uint32_t)(now_us() - ieee488_device.state_since) >= ieee488_device.cfg->t1_delay_us) {
+            if (!nrfd && expired_T1()) {
                 ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
                     if (ieee488_device.restart_loop) return;
                     DAV_ASSERT();
@@ -499,6 +518,8 @@ static void source(bool atn) {
             if (ieee488_device.restart_loop) return;
             if (!ndac) {
                 ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+                    /* Byte accepted when NDAC releases in STRS; consume it immediately. */
+                    ieee488_device.tx_loaded = false;
                     if (ieee488_device.restart_loop) return;
                     DAV_RELEASE();
                     ieee488_device.sh = IEEE488_SH_SWNS;
@@ -513,10 +534,9 @@ static void source(bool atn) {
             if (ieee488_device.restart_loop) return;
             if (ndac) {
                 ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-                    if (ieee488_device.restart_loop) return;
-                    ieee488_device.tx_loaded = false;
                     ieee488_device.sh = IEEE488_SH_SIDS;
-                    if (ieee488_device.talker == IEEE488_T_SPAS && ieee488_device.sr == IEEE488_SR_APRS) {
+                    /* SR2.7: after a serial poll response byte handshake, clear SR latch. */
+                    if (ieee488_device.talker == IEEE488_T_SPAS && (ieee488_device.sr == IEEE488_SR_APRS || ieee488_device.sr == IEEE488_SR_SQRS)) {
                         ieee488_device.sr = IEEE488_SR_NPRS;
                     }
                     ieee488_device.service_pending = false;
@@ -597,7 +617,8 @@ static __attribute__((always_inline)) void atn_handler(void) {
     if (atn) {
         // ATN asserted: force source/acceptor to idle
         if (ieee488_device.sh != IEEE488_SH_SIDS) {
-            source_force_idle_raw(true, idy);
+            /* Meet t2 by dropping DAV/EOI immediately, but preserve pending TX byte for later retry. */
+            source_force_idle_raw(false, idy);
             restart_loop = true;  // restart the main loop to handle the new state
         }
         if (ieee488_device.ah != IEEE488_AH_AIDS) {

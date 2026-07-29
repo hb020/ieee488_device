@@ -11,10 +11,10 @@ This can be used to create:
   - delay in write
   - delay in read
   - delay in reply
-  - srq generation from command, with delay
-  - srq generation from trigger, with delay
+  - delayed srq generation
   - address change
   - EOI/EOS configuration
+  - T1 and T3 configuration
   - TODO: Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
 
 And after slight modification (that means: deactivation  of the test device code):
@@ -37,20 +37,23 @@ Working:
 - clear
 - EOI/EOS handling
 - SCPI commands for testing
+- control over bus timing (T1 and T3)
 - serial interface for debugging and configuration
 
 Not compliant:
 
 - timing on an ATmega4809.
-  - The fastest I can get is about 3 us for t2 or t5, while it should be 200ns. (but what do you expect on a 16/20 MHz device...)
+  - The fastest I can get is about 3 µs for t2 or t5, while it should be 200ns. (but what do you expect on a 16/20 MHz device...)
   - None of my gateways have problems with it, PROVIDED there are no other devices on the bus.
   - When other devices are on the bus, things break: others will have finished the handshake before I can even start it. Hence: I'm missing commands.
   - A faster CPU, or elaborated CCL, is required.
-  - Interrupt handling on DAV (fetching commands) might be a possible protection against missing commands, but it is unlikely to succeed, since I'd need below 1 us handling.
+  - Interrupt handling on DAV (fetching commands) might be a possible protection against missing commands, but it is unlikely to succeed, since I'd need below 1 µs handling.
 
 TODO:
 
-- finish SCPI commands (long read/write, SRQ, add T1 and T3)
+- finish SCPI commands (long read/write)
+  - long write: todo
+  - long read: on very large writes, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810 I do not seem to need that.
 - more testing
 
 ## Notes on compatibility with gateways
@@ -144,38 +147,60 @@ The built-in SCPI interpreter is a basic interpreter, meant only for IEEE-488.1 
 
 The supported commands are:
 
+**General**:
+
 - `*IDN?` replies with `Bateau,ieee488_device,{GPIB address},{software version}`, where
   - `{GPIB address}` is the address on the bus, potentially with ':' separator for secondary address, like `5:1`
   - `{software version}` is the software version, like `0.9`
 - `:SYSTEM:ERROR?` replies with the last error. As usual.
 - `*CLS` will clear errors
 - `*RST` will reset to default configuration
-- `LONGWR? {ASCII data}` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START}`, where
-  - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E (looping).
-  - `{LEN}` is the length of data received
-  - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
-- `LONGRD? {LEN} {START}` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E (looping), where
-  - `{LEN}` is the length of the data to send
-  - `{START}` is the decimal code of the starting character (48-126)
-- `SLOWWR {MSECS}` Adds an arbitrary time before acknowledging any received data byte, where
-  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Max: 32 bits.
-- `SLOWRD {MSECS}` Adds an arbitrary delay time before transmitting any data byte, where
-  - `{MSECS}` is the delay time in milliseconds. 0 to disable.
-- `DELAYRD {MSECS}` Adds an arbitrary delay time before transmitting a reply, where
-  - `{MSECS}` is the delay time in milliseconds. 0 to disable.
-- `SLOWWR?` Returns the value (in decimal) of the time set by `SLOWWR`
-- `SLOWRD?` Returns the value (in decimal) of the time set by `SLOWRD`
-- `DELAYRD?` Returns the value (in decimal) of the time set by `DELAYRD`
-- `SRQ [{MSECS}]` for the activation of SRQ, after an optional delay, where
-  - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands, so you can time the SRQ to arrive during a communication.
 - `ADDR {PRIMARY} [{SECONDARY}]` set the address, where
   - `{PRIMARY}` is the primary address (0-30)
   - `{SECONDARY}` is the secondary address (0-30). If not given, only the primary address is taken into account
 - `EOS [{TERMCHAR}]` sets the terminating character, where
-  - `{TERMCHAR}` is the decimal value of the terminating character. If set, it is used for both in- and outgoing communication. If not given or 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
+  - `{TERMCHAR}` is the decimal value of the terminating character (1-255). If set, it is used for both in- and outgoing communication. If not given or 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
 - `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or 0 when EOS is disabled. See above.
 
-Note that `EOS` and `EOI` made to be mutually exclusive in this device. So 'end of command' is either based on EOS, either on EOI. End of command is not automatically detected from CR/LF, CR, LF, or ';', on purpose. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with LF, as is the custom.
+Note that `EOS` and `EOI` are made to be mutually exclusive here. So 'end of command' is either based on EOS, either on EOI. End of command is purposefully not automatically detected from CR/LF, CR, LF, or ';'. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with CR/LF, as is the custom.
+
+**Communications**:
+
+- `LONGWR? {ASCII data}` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START}`, where
+  - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E (looping).
+  - `{LEN}` is the length of data received.
+  - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
+- `LONGRD? [{LEN} [{START}]]` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E (looping), where
+  - `{LEN}` is the length of the data to send. Capped between 1B and close to 4GB. Default value is 1kB.
+  - `{START}` is the decimal code of the starting character. Capped between 48 and 126 (which is 0x30-0x7E). Default value value is 48.
+
+**Communications timing**:
+
+- `SLOWWR {MSECS}` Adds an arbitrary delay time between data byte acceptance by the device, where
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10000 (10 secs).
+- `SLOWWR?` Returns the value (in decimal) of the time set by `SLOWWR`
+- `SLOWRD {MSECS}` Adds an arbitrary delay time between transmitting of data bytes by the device, where
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10000 (10 secs).
+- `SLOWRD?` Returns the value (in decimal) of the time set by `SLOWRD`
+- `DELAYRD {MSECS}` Adds an arbitrary delay time between a received command and transmission of a reply, where
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10800000 (3 hours).
+- `DELAYRD?` Returns the value (in decimal) of the time set by `DELAYRD`
+
+**SRQ**:
+
+- `SRQ [{MSECS}]` for the activation of SRQ, after an optional delay, where
+  - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands other than `*CLS` and `*RST`, so you can time the SRQ to arrive during a communication. Capped between 0 and 10800000 (3 hours). If 0 or not provided: SRQ is immediate.
+
+**Bus timing**:
+
+- `T1 {USECS}` sets the T1 time (settling time for multiline messages) where
+  - `{USECS}` is the delay time in microseconds. Capped between 2 and 1000000 (2 µs to 1 sec).
+- `T1?` Returns the value (in decimal) of the time set by `T1 {USECS}`
+- `T3 {USECS}` sets the T3 time (interface message accept time, or handshake time) where
+  - `{USECS}` is the delay time in microseconds. Capped between 0 and 10000000 (10 secs). 0 means: no timeout. If you set it to a small value, data will be lost.
+- `T3?` Returns the value (in decimal) of the time set by `T3 {USECS}`
+
+The serial interface menu also gives control over some of these parameters, but is more fine grained for some, and without limit checking. It also allows debug output over the serial port.
 
 # Build
 

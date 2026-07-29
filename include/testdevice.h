@@ -1,5 +1,5 @@
-#ifndef SCPI_HANDLER_H
-#define SCPI_HANDLER_H
+#ifndef TESTDEVICE_H
+#define TESTDEVICE_H
 
 #include <Arduino.h>
 
@@ -35,8 +35,19 @@ void device_trigger(void);
  */
 uint8_t status_byte(void);
 
+/** @brief Handle a change in the remote/local status. (RL1)
+ * @param remote True if the device is now in remote mode, false if in local mode.
+ * @param lockout True if the device is now in lockout state, false otherwise.
+ */
+void remote_changed(bool remote, bool lockout);
+
+/** @brief Handle a change in the addressed status.
+ * @param addressed True if the device is now addressed, false otherwise.
+ */
+void addressed_changed(bool addressed);
+
 /** @brief Handle the idle state.
  */
 void handle_idle(void);
 
-#endif // SCPI_HANDLER_H
+#endif // TESTDEVICE_H
