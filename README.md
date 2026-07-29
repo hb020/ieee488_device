@@ -35,14 +35,14 @@ Working:
 - trigger
 - remote/local
 - clear
-- basic config menu
 - EOI/EOS handling
 - SCPI commands for testing
+- serial interface for debugging and configuration
 
 Not compliant:
 
 - timing on an ATmega4809.
-  - The fastest I can get is about 3us for t2 or t5, while it should be 200ns.
+  - The fastest I can get is about 3 us for t2 or t5, while it should be 200ns. (but what do you expect on a 16/20 MHz device...)
   - None of my gateways have problems with it, PROVIDED there are no other devices on the bus.
   - When other devices are on the bus, things break: others will have finished the handshake before I can even start it. Hence: I'm missing commands.
   - A faster CPU, or elaborated CCL, is required.
