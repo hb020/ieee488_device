@@ -55,6 +55,7 @@ extern "C" {
 // DRIVE_DIO(value, enable) // drive the DIO lines with the given value (bit 0 = DIO1, bit 1 = DIO2, ..., bit 7 = DIO8) if enable is true, otherwise release the lines
 
 // TIME_US()  // Return the time in microseconds since startup. This is used for timing constraints in the IEEE 488.1-1987 standard.
+// TIME_MS()  // Return the time in milliseconds since startup. This is used for timing constraints in the IEEE 488.1-1987 standard.
 
 /** @brief Enable or disable the DAV interrupt.
  * 

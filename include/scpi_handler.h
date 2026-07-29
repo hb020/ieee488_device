@@ -10,6 +10,11 @@
  */
 bool device_tx(uint8_t* byte, bool* end);
 
+/** @brief Check if the device is ready to receive a byte.
+ * @return true if the device is ready to receive a byte, false otherwise.
+ */
+bool device_rx_ready(void);
+
 /** @brief Handle a received byte.
  * @param byte The received byte.
  * @param end True if this is the last byte of the message, false otherwise.

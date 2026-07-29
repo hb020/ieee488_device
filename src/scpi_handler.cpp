@@ -1,8 +1,11 @@
 #include <Arduino.h>
+#include "config.h"
 #include "scpi_handler.h"
 #include "ieee488.h"
 
-extern ieee488_config_t cfg;
+// stuff from main.cpp that we need to access here
+extern int debug_level;
+extern void load_config(bool full_reset);
 
 /********************************************************************
  * This code must all be non-blocking; any blocking operations should
@@ -54,6 +57,57 @@ struct scpi_command {
 // 255 means no command recognized yet.
 static uint8_t scpi_command_idx = 255;
 
+
+static uint32_t rx_deadline = 0;  // the time by which the next rx action can continue, in milliseconds. 0 means no delay is active. This is used to implement the rx_delay_ms feature.
+
+/** @brief Arm the RX delay timer with the configured delay.
+ *
+ * To be used with the rx_delay_expired() function to check for RX delays.
+ */
+void rx_arm_delay(void) {
+    if (cfg.rx_delay_ms) {
+        rx_deadline = millis() + cfg.rx_delay_ms;
+        if (rx_deadline == 0) rx_deadline = 1;  // avoid 0, which means no delay is active
+    } else {
+        rx_deadline = 0;
+    }
+}
+
+/** @brief Check if the RX delay has expired.
+ *
+ * @return true if the RX delay has expired, false otherwise.
+ */
+bool rx_delay_expired(void) {
+    return ((rx_deadline == 0) || (int32_t)(millis() - rx_deadline) >= 0);
+}
+
+static uint32_t tx_deadline = 0;  // the time by which the next tx action can continue, in milliseconds. 0 means no delay is active. This is used to implement the tx_delay_ms feature.
+
+/** @brief Arm the TX delay timer with the configured delay.
+ *
+ * To be used with the tx_delay_expired() function to check for TX delays.
+ * @param after_command true if this is after a command has been processed, false if this is after a byte has been transmitted.
+ */
+void tx_arm_delay(bool after_command) {
+    if (after_command && cfg.reply_delay_ms) {
+        tx_deadline = millis() + cfg.reply_delay_ms;
+        if (tx_deadline == 0) tx_deadline = 1;  // avoid 0, which means no delay is active
+    } else if (cfg.tx_delay_ms) {
+        tx_deadline = millis() + cfg.tx_delay_ms;
+        if (tx_deadline == 0) tx_deadline = 1;  // avoid 0, which means no delay is active
+    } else {
+        tx_deadline = 0;
+    }
+}
+
+/** @brief Check if the TX delay has expired.
+ *
+ * @return true if the TX delay has expired, false otherwise.
+ */
+bool tx_delay_expired(void) {
+    return ((tx_deadline == 0) || (int32_t)(millis() - tx_deadline) >= 0);
+}
+
 /** @brief Restart the input buffer and state machine. */
 void restart_in(void) {
     memset(in_buffer, 0, sizeof(in_buffer));
@@ -67,6 +121,7 @@ void restart_out(void) {
     memset(out_buffer, 0, sizeof(out_buffer));
     out_counter = 0;
     scpi_out_from_buffer = true;
+    tx_arm_delay(true);  // arm the tx delay timer for the reply delay, if configured
 }
 
 /** @brief Get the end character for SCPI messages. 
@@ -180,6 +235,18 @@ static scpi_in_state_t cls_handler(uint8_t byte, bool end) {
     return SCPI_FLUSH;
 }
 
+/* `*RST` */
+static scpi_in_state_t rst_handler(uint8_t byte, bool end) {
+    // This is a placeholder for the *RST command handler.
+    // It should reset the device to its default state.
+    (void)byte;  // Unused parameter
+    (void)end;   // Unused parameter
+    cls_handler(byte, end);  // Clear the error state and buffers
+    load_config(false);
+
+    return SCPI_FLUSH;
+}
+
 /* `LONGWR? {ASCII data}` */
 static scpi_in_state_t longwr_handler(uint8_t byte, bool end) {
     // This is a placeholder for the LONGWR command handler.
@@ -215,7 +282,7 @@ static scpi_in_state_t longrd_handler(uint8_t byte, bool end) {
     return SCPI_FLUSH;
 }
 
-/* `SLOWWR {USECS}` */
+/* `SLOWWR {MSECS}` */
 static scpi_in_state_t slowwr_handler(uint8_t byte, bool end) {
     // This is a placeholder for the SLOWWR command handler.
     // It should set the device to slow write mode.
@@ -228,11 +295,11 @@ static scpi_in_state_t slowwr_handler(uint8_t byte, bool end) {
         scpi_error_state = SCPI_SYNTAX;
         return SCPI_FLUSH;
     }
-    cfg.rx_delay_us = value;
+    cfg.rx_delay_ms = value;
     return SCPI_FLUSH;
 }
 
-/* `SLOWRD {USECS}` */
+/* `SLOWRD {MSECS}` */
 static scpi_in_state_t slowrd_handler(uint8_t byte, bool end) {
     // This is a placeholder for the SLOWRD command handler.
     // It should set the device to slow read mode.
@@ -244,11 +311,11 @@ static scpi_in_state_t slowrd_handler(uint8_t byte, bool end) {
         scpi_error_state = SCPI_SYNTAX;
         return SCPI_FLUSH;
     }
-    cfg.tx_delay_us = value;
+    cfg.tx_delay_ms = value;
     return SCPI_FLUSH;
 }
 
-/* `DELAYRD {SECS}` */
+/* `DELAYRD {MSECS}` */
 static scpi_in_state_t delayrd_handler(uint8_t byte, bool end) {
     // This is a placeholder for the DELAYRD command handler.
     // It should set the device to delay read mode.
@@ -261,7 +328,7 @@ static scpi_in_state_t delayrd_handler(uint8_t byte, bool end) {
         scpi_error_state = SCPI_SYNTAX;
         return SCPI_FLUSH;
     }
-    cfg.reply_delay_s = value;
+    cfg.reply_delay_ms = value;
     return SCPI_FLUSH;
 }
 
@@ -272,7 +339,7 @@ static scpi_in_state_t slowwrq_handler(uint8_t byte, bool end) {
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
     restart_out();
-    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.rx_delay_us, endchar());
+    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.rx_delay_ms, endchar());
     return SCPI_FLUSH;
 }
 
@@ -283,7 +350,7 @@ static scpi_in_state_t slowrdq_handler(uint8_t byte, bool end) {
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
     restart_out();
-    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.tx_delay_us, endchar());
+    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.tx_delay_ms, endchar());
     return SCPI_FLUSH;
 }
 
@@ -294,11 +361,11 @@ static scpi_in_state_t delayrdq_handler(uint8_t byte, bool end) {
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
     restart_out();
-    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.reply_delay_s, endchar());
+    sprintf(out_buffer, "%lu%c", (unsigned long)cfg.reply_delay_ms, endchar());
     return SCPI_FLUSH;
 }
 
-/* `SRQ [{DELAY}]` */
+/* `SRQ [{MSECS}]` */
 static scpi_in_state_t srq_handler(uint8_t byte, bool end) {
     (void)byte;  // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
@@ -333,6 +400,7 @@ static scpi_in_state_t addr_handler(uint8_t byte, bool end) {
     } else {
         cfg.extended_address = false;
     }
+    ieee488_reset(false);  // Reset the device with the new address, but do not reset the configuration
     return SCPI_FLUSH;
 }
 
@@ -377,7 +445,7 @@ static scpi_command scpi_commands[] = {
     {":SYSTEM:ERR?", err_handler},
     {":SYST:ERROR?", err_handler},
     {":SYSTEM:ERROR?", err_handler},
-    {"*RST", nullptr},
+    {"*RST", rst_handler},
     {"*CLS", cls_handler},
     {"LONGWR?", longwr_handler},
     {"LONGRD?", longrd_handler},
@@ -393,23 +461,30 @@ static scpi_command scpi_commands[] = {
     {"EOS?", eosq_handler},
 };
 
+bool add_to_in_buffer(uint8_t byte, bool end) {
+    if (in_counter >= sizeof(in_buffer) - 1) {
+        // Buffer overflow, silently flush
+        scpi_error_state = SCPI_OVERFLOW;
+        scpi_in_state = SCPI_FLUSH;
+        if (end) {
+            restart_in();  // Clear the input buffer after processing
+        }    
+        return false;
+    }
+    in_buffer[in_counter++] = (char)byte;
+    return true;
+}
+
+
 /** @brief Handle a received byte to be used in a command.
  * @param byte The received byte.
  * @param end True if this is the last byte of the message, false otherwise.
  */
 void read_command(uint8_t byte, bool end) {
-    // store the byte in the input buffer if we are in receiving or finishing command state
-    if (scpi_in_state == SCPI_RECEIVING_COMMAND || scpi_in_state == SCPI_FINISHING_COMMAND) {
-        if (in_counter >= sizeof(in_buffer) - 1) {
-            // Buffer overflow, silently flush
-            scpi_error_state = SCPI_OVERFLOW;
-            scpi_in_state = SCPI_FLUSH;
-            return;
-        }
-        // Not in idle state, store the byte in the input buffer
-        in_buffer[in_counter++] = (char)byte;
-        // and continue to process the byte in the state machine below
-    }
+    // Serial.print("Read_Command, scpi_in_state=");
+    // Serial.print(scpi_in_state);
+    // Serial.print(", in_counter=");
+    // Serial.println(in_counter);
 
     switch (scpi_in_state) {
         case SCPI_IDLE:
@@ -421,6 +496,9 @@ void read_command(uint8_t byte, bool end) {
             // if not: fall through to receiving command state
             scpi_in_state = SCPI_RECEIVING_COMMAND;
         case SCPI_RECEIVING_COMMAND:
+            if (!add_to_in_buffer(byte, end)) {
+                return;  // Buffer overflow, stop processing
+            }
             // In receiving command state, we are collecting bytes for the command
             // handle the byte if it is the end of the command or a whitespace
             if (end || (byte == ' ')) {
@@ -443,9 +521,6 @@ void read_command(uint8_t byte, bool end) {
                         } else {
                             scpi_in_state = SCPI_FLUSH;  // No handler, flush the input
                         }
-                        if (end) {
-                            restart_in();  // Clear the input buffer after processing
-                        }
                         return;
                     }
                 }
@@ -457,7 +532,9 @@ void read_command(uint8_t byte, bool end) {
             break;
         case SCPI_FINISHING_COMMAND:
             // In finishing command state, we are waiting for the end of the command
-
+            if (!add_to_in_buffer(byte, end)) {
+                return;  // Buffer overflow, stop processing
+            }
             // We are waiting for the end of the command
             if (end) {
                 // Call the handler again to finish processing
@@ -467,7 +544,6 @@ void read_command(uint8_t byte, bool end) {
                         cmd.handler(byte, end);
                     }
                 }
-                scpi_in_state = SCPI_IDLE;
             }
             break;
         case SCPI_STREAM:
@@ -478,6 +554,9 @@ void read_command(uint8_t byte, bool end) {
             // In flush state, we are ignoring all input until the next command
             break;
     }
+    if (end) {
+        restart_in();  // Clear the input buffer after processing
+    }    
     return;
 }
 
@@ -501,21 +580,48 @@ void read_stream(uint8_t byte, bool end) {
  * @return true if a byte was provided, false if there are no more bytes to send.
  */
 bool device_tx(uint8_t* byte, bool* end) {
+    if (!tx_delay_expired()) {
+        // If the TX delay has not expired, we cannot send a byte yet
+        *end = false;
+        return false;
+    }
     if (!scpi_out_from_buffer) {
         // If we are not sending from the buffer, we can indicate that there is no data to send
         // TODO fill in
         *end = true;
         return false;
     }
-    uint8_t ch = 0;
-    if (out_counter >= sizeof(out_buffer) - 1) {
-        // all sent
-        *end = true;
+    if (out_counter >= strlen(out_buffer)) {
+        *end = true;        
         return false;
     }
     *byte = (uint8_t)out_buffer[out_counter++];
-    *end = out_counter == strlen(out_buffer);
+    *end = out_counter >= strlen(out_buffer);
+    tx_arm_delay(false);  // arm the tx delay timer for the next byte, if configured
+
+    if (debug_level > 0) {
+        Serial.print("TX ");
+        if (*byte < 32) {
+            Serial.print("0x");
+            if (*byte < 16) Serial.print("0");
+            Serial.print(*byte, HEX);
+        } else {
+            Serial.print("'");
+            Serial.print((char)*byte);
+            Serial.print("'");
+        }
+        if (*end) Serial.print(" END");
+        Serial.println();
+    }    
     return true;
+}
+
+/** @brief Check if the device is ready to receive a byte.
+ * @return true if the device is ready to receive a byte, false otherwise.
+ */
+bool device_rx_ready(void){
+    // The device is ready to receive a byte if the RX delay has expired
+    return rx_delay_expired(); // you might want to add:  && (scpi_in_state != SCPI_FLUSH);
 }
 
 /** @brief Handle a received byte.
@@ -523,20 +629,22 @@ bool device_tx(uint8_t* byte, bool* end) {
  * @param end True if this is the last byte of the message, false otherwise.
  */
 void device_rx(uint8_t byte, bool end) {
-    // debug
-    Serial.print("RX ");
-    if (byte < 32) {
-        Serial.print("0x");
-        if (byte < 16) Serial.print("0");
-        Serial.print(byte, HEX);
-    } else {
-        Serial.print("'");
-        Serial.print((char)byte);
-        Serial.print("'");
+    if (debug_level > 0) {
+        Serial.print("RX ");
+        if (byte < 32) {
+            Serial.print("0x");
+            if (byte < 16) Serial.print("0");
+            Serial.print(byte, HEX);
+        } else {
+            Serial.print("'");
+            Serial.print((char)byte);
+            Serial.print("'");
+        }
+        if (end) Serial.print(" END");
+        Serial.println();
     }
-    if (end) Serial.print(" END");
-    Serial.println();
     read_command(byte, end);
+    rx_arm_delay();  // arm the rx delay timer for the next byte, if configured
     if (end) {
         restart_in();
     }

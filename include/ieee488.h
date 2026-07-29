@@ -88,10 +88,14 @@ typedef struct {
     uint32_t handshake_timeout_us;        // T3 handshake timeout us, 0 = no software timeout
     uint32_t t1_delay_us;                 // T1 source settling delay; see 2.3 and 3.8
     uint8_t pp_line;                      // The DIO line to use for parallel poll local (1-8). 0 for 'not configured'.
-    uint32_t rx_delay_us;                 // Delay in microseconds between receiving bytes. 0 for no delay.
-    uint32_t tx_delay_us;                 // Delay in microseconds between transmitting bytes. 0 for no delay.
-    uint32_t reply_delay_s;               // Delay in seconds before sending a reply. 0 for no delay. This is handled outside of the ieee488 code.   
+
+    // Not (yet) used in the ieee488 code, but can be used in the callbacks to implement delays between bytes.
+    uint32_t rx_delay_ms;                 // Delay in milliseconds between receiving bytes. 0 for no delay.
+    uint32_t tx_delay_ms;                 // Delay in milliseconds between transmitting bytes. 0 for no delay.
+    uint32_t reply_delay_ms;              // Delay in milliseconds before sending a reply. 0 for no delay. This is handled outside of the ieee488 code.
 } ieee488_config_t;
+
+extern ieee488_config_t cfg;
 
 /** @brief Callbacks for an IEEE 488.1-1987 device.
  *
@@ -106,6 +110,11 @@ typedef struct {
      * @return true if a byte was provided, false if there are no more bytes to send.
      */
     bool (*tx_next)(uint8_t* byte, bool* end);
+
+    /** @brief Check if the device is ready to receive a byte.
+     * @return true if the device is ready to receive a byte, false otherwise.
+     */
+    bool (*rx_ready)(void);
 
     /** @brief Handle a received byte.
      * @param byte The received byte.
@@ -191,8 +200,8 @@ typedef enum __attribute__((packed)) { IEEE488_PP_PPIS,
 
 /** @brief Internal state of an IEEE 488.1-1987 device. */
 typedef struct ieee488_device {
-    ieee488_config_t cfg;    // Configuration for the device.
-    ieee488_callbacks_t cb;  // Callbacks for the device.
+    ieee488_config_t *cfg;    // Configuration for the device.
+    ieee488_callbacks_t *cb;  // Callbacks for the device.
 
     volatile ieee488_sh_state_t sh;       // Source Handshake (SH) state.
     volatile ieee488_ah_state_t ah;       // Acceptor Handshake (AH) state.
@@ -214,21 +223,20 @@ typedef struct ieee488_device {
     bool tx_loaded;                                           // true if a byte is loaded for transmission, false otherwise.
     bool tx_end;                                              // true if the loaded byte is the last byte of the message, false otherwise.
     uint8_t tx_byte;                                          // the byte loaded for transmission.
-    uint32_t deadline;                                        // the time by which the current operation must complete, in microseconds.
+    uint32_t handshake_deadline;                               // the time by which the current handshake operation must complete, in microseconds.
     uint32_t state_since;                                     // the time since the last state change, in microseconds.
     volatile uint8_t last_atn, last_eoi, last_ren;  // the last states of the interface signals.
     bool last_addressed;                                      // true if the device was last addressed, false otherwise.
     volatile uint8_t restart_loop;                            // true if the main loop should be restarted, false otherwise.
 } ieee488_device_t;
 
-extern ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance.
+extern ieee488_device_t ieee488_device;  // The global IEEE 488.1-1987 device instance. To be used only by ieee488.c, or for debugging.
+extern ieee488_callbacks_t cb;  // The global callbacks instance for the IEEE 488.1-1987 device.
+extern ieee488_config_t cfg;  // The global configuration instance for the IEEE 488.1-1987 device.
 
 /** @brief Initialize the device.
- * @param hal The hardware abstraction layer.
- * @param cfg The device configuration.
- * @param cb The device callbacks.
  */
-void ieee488_init(const ieee488_config_t* cfg, const ieee488_callbacks_t* cb);
+void ieee488_init(void);
 
 /** @brief Reset the device.
  *

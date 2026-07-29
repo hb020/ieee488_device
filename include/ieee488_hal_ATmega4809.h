@@ -108,6 +108,7 @@ extern "C" {
 #endif
 
 #define TIME_US() (micros())
+#define TIME_MS() (millis())
 
 #ifdef __cplusplus
 }

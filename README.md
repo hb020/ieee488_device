@@ -4,13 +4,27 @@ Portable gnu-11 implementation of an IEEE-488.1 **device-side** interface, exclu
 
 This can be used to create:
 
+- a standalone test device for GPIB controllers and testing for client programs. This is the main use case. It supports:
+  - identification `*IDN?`
+  - large writes
+  - large reads
+  - delay in write
+  - delay in read
+  - delay in reply
+  - srq generation from command, with delay
+  - srq generation from trigger, with delay
+  - address change
+  - EOI/EOS configuration
+  - TODO: Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
+
+And after slight modification (that means: deactivation  of the test device code):
+
 - a GPIB interface to any device
-- a standalone test device for GPIB controllers
 - a GPIB-to-LAN gateway (like ICS's 4865)
 
 ## Status
 
-This is an early version, and will likely not work when there are other devices on the bus.
+This is an early version, and will not work when there are other devices on the bus.
 
 Working:
 
@@ -23,6 +37,7 @@ Working:
 - clear
 - basic config menu
 - EOI/EOS handling
+- SCPI commands for testing
 
 Not compliant:
 
@@ -35,20 +50,8 @@ Not compliant:
 
 TODO:
 
-- write a pseudo device that simulates some of the 'difficulties' with GPIB and support automatic CXI-11.2 gateway tests:
-  - basic `*IDN?`
-  - large write
-  - large read
-  - delay in write
-  - delay in read
-  - srq generation from command, with programmable delay
-  - srq generation from trigger, with programmable delay
-  - status byte SRQ bit reset after read stb
-  - clear, collaborating with status byte set command
-  - address change
-  - EOI/EOS change
-  - Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
-- Support multiple addresses at the same time
+- finish SCPI commands (long read/write, SRQ)
+- more testing
 
 ## Notes on compatibility with gateways
 
@@ -137,7 +140,7 @@ If you want to move to a better chain, you WILL want to use 'real' atomic variab
 
 > This is WIP
 
-The built-in SCPI interpreter is a basic interpreter, meant only for IEEE-488.1 compliance tests for gateways (and client software). It does not support command chaining, and does not support the full mandatory IEEE-488.2 command set.
+The built-in SCPI interpreter is a basic interpreter, meant only for IEEE-488.1 compliance tests for both gateways and client software. It does not support command chaining, and does not support the full mandatory IEEE-488.2 command set.
 
 The supported commands are:
 
@@ -154,17 +157,17 @@ The supported commands are:
 - `LONGRD? {LEN} {START}` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E (looping), where
   - `{LEN}` is the length of the data to send
   - `{START}` is the decimal code of the starting character (48-126)
-- `SLOWWR {USECS}` Adds an arbitrary time before acknowledging any received data byte, where
-  - `{USECS}` is the delay time in microseconds. 0 to disable.
-- `SLOWRD {USECS}` Adds an arbitrary delay time before transmitting any data byte, where
-  - `{USECS}` is the delay time in seconds
-- `DELAYRD {SECS}` Adds an arbitrary delay time before transmitting a reply, where
-  - `{SECS}` is the delay time in seconds
+- `SLOWWR {MSECS}` Adds an arbitrary time before acknowledging any received data byte, where
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Max: 32 bits.
+- `SLOWRD {MSECS}` Adds an arbitrary delay time before transmitting any data byte, where
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable.
+- `DELAYRD {MSECS}` Adds an arbitrary delay time before transmitting a reply, where
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable.
 - `SLOWWR?` Returns the value (in decimal) of the time set by `SLOWWR`
 - `SLOWRD?` Returns the value (in decimal) of the time set by `SLOWRD`
 - `DELAYRD?` Returns the value (in decimal) of the time set by `DELAYRD`
-- `SRQ [{DELAY}]` for the activation of SRQ, after an optional delay, where
-  - `{SECS}` is the delay time in seconds. The delay will not be reset by other commands, so you can time the SRQ to arrive during a communication.
+- `SRQ [{MSECS}]` for the activation of SRQ, after an optional delay, where
+  - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands, so you can time the SRQ to arrive during a communication.
 - `ADDR {PRIMARY} [{SECONDARY}]` set the address, where
   - `{PRIMARY}` is the primary address (0-30)
   - `{SECONDARY}` is the secondary address (0-30)
