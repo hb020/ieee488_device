@@ -50,7 +50,7 @@ Not compliant:
 
 TODO:
 
-- finish SCPI commands (long read/write, SRQ)
+- finish SCPI commands (long read/write, SRQ, add T1 and T3)
 - more testing
 
 ## Notes on compatibility with gateways
@@ -148,8 +148,8 @@ The supported commands are:
   - `{GPIB address}` is the address on the bus, potentially with ':' separator for secondary address, like `5:1`
   - `{software version}` is the software version, like `0.9`
 - `:SYSTEM:ERROR?` replies with the last error. As usual.
-- `*CLS`
-- `*RST`
+- `*CLS` will clear errors
+- `*RST` will reset to default configuration
 - `LONGWR? {ASCII data}` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START}`, where
   - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E (looping).
   - `{LEN}` is the length of data received
@@ -170,7 +170,7 @@ The supported commands are:
   - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands, so you can time the SRQ to arrive during a communication.
 - `ADDR {PRIMARY} [{SECONDARY}]` set the address, where
   - `{PRIMARY}` is the primary address (0-30)
-  - `{SECONDARY}` is the secondary address (0-30)
+  - `{SECONDARY}` is the secondary address (0-30). If not given, only the primary address is taken into account
 - `EOS [{TERMCHAR}]` sets the terminating character, where
   - `{TERMCHAR}` is the decimal value of the terminating character. If set, it is used for both in- and outgoing communication. If not given or 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
 - `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or 0 when EOS is disabled. See above.
