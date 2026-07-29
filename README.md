@@ -53,7 +53,7 @@ TODO:
 
 - finish SCPI commands (long read/write)
   - long write: todo
-  - long read: on very large writes, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810 I do not seem to need that.
+  - long read: on very large reads, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that.
 - more testing
 
 ## Notes on compatibility with gateways
@@ -170,9 +170,9 @@ Note that `EOS` and `EOI` are made to be mutually exclusive here. So 'end of com
   - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E (looping).
   - `{LEN}` is the length of data received.
   - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
-- `LONGRD? [{LEN} [{START}]]` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E (looping), where
-  - `{LEN}` is the length of the data to send. Capped between 1B and close to 4GB. Default value is 1kB.
-  - `{START}` is the decimal code of the starting character. Capped between 48 and 126 (which is 0x30-0x7E). Default value value is 48.
+- `LONGRD? [{LEN} [{START}]]` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E ('0'-'~') (looping), where
+  - `{LEN}` is the length of the data to send. You can go up to almost 4GB. Not that it would be advisable.... Default value is 1024.
+  - `{START}` is the decimal code of the starting character. Capped between 48 and 126 (which is 0x30-0x7E). Default value value is 48 (0x30, '0').
 
 **Communications timing**:
 
