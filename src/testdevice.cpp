@@ -291,14 +291,99 @@ static scpi_in_state_t rst_handler(uint8_t byte, bool end) {
 }
 
 /* `LONGWR? {ASCII data}` */
+typedef enum {LONGWR_STARTING, LONGWR_RECEIVING, LONGWR_TRAILING, LONGWR_FLUSH} longwr_state_t;
+static longwr_state_t longwr_state = LONGWR_STARTING;
+static size_t longwr_counter = 0;  // The number of bytes received in the long write operation
+static uint8_t longwr_start;  // The start character of the long write data
+static uint8_t longwr_lastchar;  // The last character received in the long write operation
+static char longwr_errmsg[128];  // Buffer for error messages
+
+static void longwr_create_reply(void) {
+    restart_out();
+    if (longwr_errmsg[0] != '\0') {
+        sprintf(out_buffer, "-1,%d,\"%s\"%s", (int)longwr_start, longwr_errmsg, endchars());
+    } else {
+        sprintf(out_buffer, "%lu,%d,\"\"%s", (unsigned long)longwr_counter, (int)longwr_start, endchars());
+    }
+}
+
+
 static scpi_in_state_t longwr_handler(uint8_t byte, bool end) {
+
+
     // This is the LONGWR command handler.
     // It sets the device to long write mode.
     (void)byte;  // Unused parameter
-    (void)end;   // Unused parameter
 
-    if (!end) return SCPI_STREAM;  // Enter stream mode to receive the ASCII data
-    return SCPI_FLUSH;
+    if (scpi_in_state == SCPI_RECEIVING_COMMAND) {
+        // The first word of the command has been received
+        longwr_counter = 0;
+        longwr_start = 0; 
+        longwr_lastchar = 0;
+        longwr_errmsg[0] = '\0';  // Clear any error message
+        longwr_state = LONGWR_STARTING;
+        longwr_create_reply();
+        return SCPI_STREAM;
+    }
+    // I am in stream mode
+    if (longwr_state == LONGWR_STARTING) {
+        // I am in the starting state, waiting for the first byte of the ASCII data
+        if (isspace(byte) || byte == '\'' || byte == '"') {
+            // Ignore leading whitespace
+            // return immediately. No need to change the state, as we are still in the starting state
+            // and if this is the end, I have already positioned the output buffer to a reply
+            return SCPI_STREAM;
+        }
+        longwr_start = byte;
+        longwr_lastchar = 0;
+        longwr_counter = 0;
+        longwr_errmsg[0] = '\0';  // Clear the error message (again, just in case)
+        longwr_state = LONGWR_RECEIVING;
+        // and fall through to the receiving state to process the first byte of data
+    }
+    if (longwr_state == LONGWR_RECEIVING) {
+        // I am in the stream handling state, receiving the ASCII data
+        // have done the first byte, now we are receiving the rest of the ASCII data
+        if (isspace(byte) || byte == '\'' || byte == '"') {
+            // flush whitespace or quote at the end of the data, and return the reply
+            longwr_state = LONGWR_TRAILING;
+        } else {
+            longwr_counter++;
+            if (byte < 0x30 || byte > 0x7E) {
+                // Invalid character received, flush the rest of the data and return an error
+                sprintf(longwr_errmsg, "LONGWR? command received invalid character 0x%02X at position %lu", byte, (unsigned long)longwr_counter);
+                longwr_create_reply();
+                longwr_state = LONGWR_FLUSH;
+            }
+            if (longwr_lastchar != 0) {
+                // the first character has been received, compare sequence
+                if (longwr_lastchar == 0x7E && byte == 0x30) {
+                    // wrap around from 0x7E to 0x30 is allowed
+                } else if (byte != longwr_lastchar + 1) {
+                    // Invalid character sequence received, flush the rest of the data and return an error
+                    sprintf(longwr_errmsg, "LONGWR? command received invalid character sequence 0x%02X after 0x%02X at position %lu", byte, longwr_lastchar, (unsigned long)longwr_counter);
+                    longwr_create_reply();
+                    longwr_state = LONGWR_FLUSH;
+                }
+            }
+            longwr_lastchar = byte;
+        }
+    }
+    if ((longwr_state == LONGWR_TRAILING) && (!end)) {
+        // I am in the trailing state, waiting for the end of the message
+        if (!(isspace(byte) || byte == '\'' || byte == '"')) {
+            // Invalid character received after the data, flush the rest of the data and return an error
+            sprintf(longwr_errmsg, "LONGWR? command received invalid character 0x%02X after data", byte);
+            longwr_create_reply();
+            longwr_state = LONGWR_FLUSH;
+        }
+    }
+    if (end) {
+        // The end of the message has been received, return the reply
+        longwr_create_reply();
+        longwr_state = LONGWR_FLUSH;
+    }
+    return SCPI_STREAM;
 }
 
 
@@ -710,8 +795,13 @@ void read_command(uint8_t byte, bool end) {
             }
             break;
         case SCPI_STREAM:
-            // In stream state, we are ignoring all input until the end of the message
-
+            // In stream state, we are reading all input until the end of the message
+            if (scpi_command_idx < sizeof(scpi_commands) / sizeof(scpi_commands[0])) {
+                struct scpi_command cmd = scpi_commands[scpi_command_idx];
+                if (cmd.handler) {
+                    cmd.handler(byte, end);
+                }
+            }
             break;
         case SCPI_FLUSH:
             // In flush state, we are ignoring all input until the next command

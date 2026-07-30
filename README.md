@@ -166,11 +166,12 @@ Note that `EOS` and `EOI` are made to be mutually exclusive here. So 'end of com
 
 **Communications**:
 
-- `LONGWR? {ASCII data}` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START}`, where
-  - `{ASCII data}` is ascii data in the range 0x30-0x7E. It should be made of sequentially increasing characters in the range 0x30-0x7E (looping).
-  - `{LEN}` is the length of data received.
-  - `{START}` is the decimal code of the starting character. It will be 0 when the data that was sent does not respect the sequentiality mentioned above.
-- `LONGRD? [{LEN} [{START}]]` will result in a reply of an arbitrary length, made of sequentially increasing characters in the range 0x30-0x7E ('0'-'~') (looping), where
+- `LONGWR? "{ASCII data}"` writes an arbitrary quantity of ASCII data to the device. The reply will be in the format `{LEN},{START},"{ERROR}"`, where
+  - `{ASCII data}` is ascii data (in quotes). It should be made of sequentially increasing characters in the range 0x30-0x7E (`0`-`~`) (looping).
+  - `{LEN}` is the length of data received. It will be -1 in case of an error (non sequentiality or format error).
+  - `{START}` is the decimal code of the starting character.
+  - `{ERROR}` is the error reason (if there was an error).
+- `LONGRD? [{LEN} [{START}]]` will result in a reply of an arbitrary length (not surrounded by quotes), made of sequentially increasing characters in the range 0x30-0x7E (`0`-`~`) (looping), where
   - `{LEN}` is the length of the data to send. You can go up to almost 4GB. Not that it would be advisable.... Default value is 1024.
   - `{START}` is the decimal code of the starting character. Capped between 48 and 126 (which is 0x30-0x7E). Default value value is 48 (0x30, '0').
 
@@ -189,7 +190,7 @@ Note that `EOS` and `EOI` are made to be mutually exclusive here. So 'end of com
 **SRQ**:
 
 - `SRQ [{MSECS}]` for the activation of SRQ, after an optional delay, where
-  - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands other than `*CLS` and `*RST`, so you can time the SRQ to arrive during a communication. Capped between 0 and 10800000 (3 hours). If 0 or not provided: SRQ is immediate.
+  - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands (except `*CLS` and `*RST`, but they're supposed to do that), so you can time the SRQ to arrive during a communication. Capped between 0 and 10800000 (3 hours). If 0 or not provided: SRQ is immediate.
 
 **Bus timing**:
 
