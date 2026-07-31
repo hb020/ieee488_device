@@ -137,8 +137,6 @@ bool srq_delay_expired(void) {
     return ((srq_deadline != 0) && (int32_t)(millis() - srq_deadline) >= 0);
 }
 
-
-
 /** @brief Restart the input buffer and state machine. */
 void restart_in(void) {
     memset(in_buffer, 0, sizeof(in_buffer));
@@ -917,8 +915,10 @@ void device_trigger(void) {
 }
 
 uint8_t status_byte(void) {
-    // TODO add volatile SRQ bit 6 to the status byte if a service request is pending
-    uint8_t status = 0x10;
+    uint8_t status = 0x00;
+    if (out_counter < strlen(out_buffer)) {
+        status |= 0x01;  // Message available bit set
+    }
     if (scpi_error_state != SCPI_NONE) {
         status |= 0x04;  // Syntax error bit set
     }

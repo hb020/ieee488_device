@@ -6,3 +6,5 @@
 .DS_Store
 ieee488_device.code-workspace
 .vscode/extensions.json
+__pycache__
+.venv
