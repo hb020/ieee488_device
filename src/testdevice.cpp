@@ -175,17 +175,19 @@ const char *endchars(void) {
  * 
  * @param values Pointer to an array of uint32_t to be filled with the parsed values
  * @param num_values The number of values to parse and fill in the values array
+ * @param allowed_separators A string of characters that are allowed as single char separators between values (space is always allowed). 
+ *        If NULL, only whitespace is allowed.
  * @return the number of values read
  */
-int get_uint32_varvalues(uint32_t* values, size_t num_values) {
+int get_uint32_varvalues(uint32_t* values, size_t num_values, const char *allowed_separators) {
     const char* ptr = in_buffer;
     int values_found = 0;
     if (!values) return 0;
     // Skip the first word
     char* endptr;
+    while (*ptr && isspace(*ptr)) ptr++;  // Skip leading whitespace
     ptr = strchr(ptr, ' ');
     if (!ptr) return 0;
-    while (*ptr && isspace(*ptr)) ptr++;  // Skip whitespace
 
     while (*ptr && values_found < num_values) {
         values[values_found++] = strtoul(ptr, &endptr, 10);
@@ -194,10 +196,34 @@ int get_uint32_varvalues(uint32_t* values, size_t num_values) {
             return values_found - 1;  // Return the number of values found so far
         }
         ptr = endptr;
+        if (!*ptr) break;  // End of string
+        if (!isspace(*ptr)) {
+            // Invalid character found
+            if (allowed_separators && (!strchr(allowed_separators, *ptr))) {
+                // Invalid character found, stop parsing
+                return values_found - 1;  // Return the number of values found so far
+            }
+            ptr++;  // Skip the allowed separator
+        }
         while (*ptr && isspace(*ptr)) ptr++;  // Skip whitespace
     }
 
     return values_found;
+}
+
+/** @brief Parse a string of space separated uint32_t integers from in_buffer and fill the values array.
+ * 
+ * The values are expected to be in decimal format, separated by whitespace.
+ * The first word in the string is to be ignored. 
+ * in_buffer has no leading whitespace, but can have trailing whitespace 
+ * and multiple spaces between the values.
+ * 
+ * @param values Pointer to an array of uint32_t to be filled with the parsed values
+ * @param num_values The number of values to parse and fill in the values array
+ * @return the number of values read
+ */
+int get_uint32_varvalues(uint32_t* values, size_t num_values) {
+    return get_uint32_varvalues(values, num_values, NULL);
 }
 
 /*
@@ -555,13 +581,14 @@ static scpi_in_state_t srq_handler(uint8_t byte, bool end) {
     return SCPI_FLUSH;
 }
 
-/* `ADDR {PRIMARY} [{SECONDARY}]` */
+/* `ADDR {PRIMARY}[,{SECONDARY}]` (with allowed separators ",:. ") */
 static scpi_in_state_t addr_handler(uint8_t byte, bool end) {
     (void)byte;  // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
     
     uint32_t value[2];
-    int num_values = get_uint32_varvalues(value, 2);
+
+    int num_values = get_uint32_varvalues(value, 2, ",:.");
     if (num_values < 1) {
         scpi_error_state = SCPI_PARAMETER;
         return SCPI_FLUSH;
