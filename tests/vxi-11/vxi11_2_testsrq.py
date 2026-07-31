@@ -310,7 +310,7 @@ class VXI11_2_testssrq(vxi11_2_base.VXI11_2_Base):
         test_instrument = self.start_instrument
         
         if (self.start_instrument == self.end_instrument):
-            logger.warning(f"Single emitter SRQ test: only one instrument {self.start_instrument} on the bus, cannot test multiple listeners")
+            logger.warning(f"Single emitter SRQ test: only one instrument ({self.start_instrument}) on the test, cannot test multiple listeners")
             return True
         
         retvalue = True
@@ -383,7 +383,7 @@ class VXI11_2_testssrq(vxi11_2_base.VXI11_2_Base):
         test_instrument = self.start_instrument
         
         if (self.start_instrument == self.end_instrument):
-            logger.warning(f"Multiple emitter SRQ test: only one instrument {self.start_instrument} on the bus, cannot test multiple emitters")
+            logger.warning(f"Multiple emitter SRQ test: only one instrument ({self.start_instrument}) on the test, cannot test multiple emitters")
             return True
                 
         retvalue = True
