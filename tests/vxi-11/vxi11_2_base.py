@@ -56,17 +56,41 @@ class VXI11_2_Base:
         :raises ValueError: If the instrument addresses are invalid.
         """
         self.gateway_ip = gateway_ip
-        self.inst_addresses = self.extract_instrument_addresses(inst_addresses)
+        self.inst_addresses = self.validate_instrument_addresses(inst_addresses)
         if self.inst_addresses is None:
             raise ValueError(f"Invalid instrument addresses: {inst_addresses}")
         self.visa_provider = visa_provider
         self._inst_contexts = {}
         self.rm, self.visa_provider = self.get_resource_manager(visa_provider)
-        logger.info(f"Using VISA provider: {self.visa_provider}")
+        logger.debug(f"Using VISA provider: {self.visa_provider}")
         self.prepare_instrument_context()
-        
+
     @classmethod
-    def extract_instrument_addresses(cls,inst_addresses: str) -> list[str] | None:
+    def testmethods(cls) -> list[str]:
+        """Get a list of test methods available in the class.
+        
+        Every subclass should implement this method to return a list of test methods that it implements.
+        
+        The run() method will call each of these test methods in turn for each instrument context, or you can give it a specific test number.
+        
+        If you have more than 1 test method in the class use 
+
+        :return: A list of test method names.
+        :rtype: list[str]
+        """
+        return ["Basic"] 
+    
+    @classmethod
+    def get_possible_visa_providers(cls) -> list[str]:
+        """Get a list of possible VISA providers for the current platform.
+
+        :return: A list of possible VISA providers.
+        :rtype: list[str]
+        """
+        return RESOURCE_MANAGERS
+
+    @classmethod
+    def validate_instrument_addresses(cls,inst_addresses: str) -> list[str] | None:
         """Validate the format of the instrument addresses string.
 
         :param inst_addresses: A string specifying the instrument addresses, separated by ';'. 
@@ -113,16 +137,7 @@ class VXI11_2_Base:
     def __del__(self):
         """Destructor to clean up resources."""
         self.close()
-        
-    @classmethod
-    def get_possible_visa_providers(cls) -> list[str]:
-        """Get a list of possible VISA providers for the current platform.
-
-        :return: A list of possible VISA providers.
-        :rtype: list[str]
-        """
-        return RESOURCE_MANAGERS
-    
+            
     def get_resource_manager(self, visa_provider: Optional[str]) -> tuple[pyvisa.ResourceManager, str]:
         """
         Get a PyVISA ResourceManager for the specified VISA provider.
@@ -266,16 +281,19 @@ class VXI11_2_Base:
         """
         return { "cmds_init": ["*CLS"]}
     
-    def run(self) -> bool:
+    def run(self, test: int) -> bool:
         """Run the tests for all instruments in the specified range.
 
+        :param test: The test to run. The number is from the index from `testmethods()`. 
+        :type test: int
         :return: True if all tests passed, False otherwise
         :rtype: bool
         """
+        logger.info(f"Test \"{self.testmethods()[test]}\": Start")        
         all_passed = True
         for inst_nr, context in self._inst_contexts.items():
             resource_name = context["resource_name"]
-            logger.info(f"Setting up instrument {inst_nr} at {resource_name}")
+            logger.info(f"Connecting to instrument {inst_nr} at {resource_name}")
             if not self.open_instrument(inst_nr):
                 logger.error(f"Failed to setup instrument {inst_nr} at {resource_name}")
                 all_passed = False
@@ -283,7 +301,7 @@ class VXI11_2_Base:
             
             inst = context["inst"]
             cmds_init = context["cmds_init"]
-            logger.info(f"Initializing instrument {inst_nr} with commands: {cmds_init}")
+            logger.debug(f"Initializing instrument {inst_nr} with commands: {cmds_init}")
             for cmd in cmds_init:
                 try:
                     inst.write(cmd)
@@ -292,13 +310,14 @@ class VXI11_2_Base:
                     all_passed = False
                     break
             
-            if not self.test_instrument(inst_nr, context):
+            if not self.test_instrument(inst_nr, context, test):
                 all_passed = False
         
+        logger.info(f"Test \"{self.testmethods()[test]}\": {'OK' if all_passed else 'FAILED'}")
         return all_passed
     
     
-    def test_instrument(self, inst_nr: int, context: dict) -> bool:
+    def test_instrument(self, inst_nr: int, context: dict, test: int) -> bool:
         """Run the actual tests for the given instrument number.
         
         This method should be overridden in a subclass to implement specific tests.
@@ -310,10 +329,12 @@ class VXI11_2_Base:
         :type inst_nr: int
         :param context: The instrument context for the given instrument. This context is created by the make_instrument_context method and contains all test specific information for the instrument.
         :type context: dict
+        :param test: The test to run. The number is from the index from `testmethods()`.
+        :type test: int
         :return: True if all tests passed, False otherwise
         :rtype: bool
         """
-        logger.info(f"Running tests for instrument {inst_nr}")
+        logger.debug(f"Running tests for instrument {inst_nr}")
         # Implement specific tests here
         return True
 

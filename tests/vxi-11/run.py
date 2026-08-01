@@ -19,7 +19,7 @@
 # ppoll, via DOCMD. Few gateways support that.
 #
 from vxi11_2_base import VXI11_2_Base
-from vxi11_2_testsrq import VXI11_2_testssrq
+from vxi11_2_testsrq import VXI11_2_testsrq
 import logging
 import argparse
 import sys
@@ -39,15 +39,31 @@ logger = logging.getLogger(__name__)
 # Set log level for this module
     
 if __name__ == "__main__":
-    # Parse command line arguments    
-    parser = argparse.ArgumentParser(description="Test SRQ handling for VXI-11.",
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("gateway_ip", type=str, nargs="?", default=DEFAULT_GATEWAY_IP, help="The IP address of the gateway device to use for tests.")
-    parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'. Addresses may contain secondary addresses, in which case the format is '{primary},{secondary}'. Examples: '1' or '1;2,0;2,1'")
-    parser.add_argument("-V", "--visa-provider", type=str, default="", choices=VXI11_2_Base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
-    parser.add_argument("-T", "--test", type=int, default=0, choices=range(0, 4), help="The test to run. 0 is all. 1 is individual SRQ tests. 2 is single emitter SRQ test. 3 is multiple emitter SRQ test.")
-    parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
+    # Parse command line arguments
     
+    # The names to use for the tests, indexed by test number. The first test is 0, which means all tests.
+    test_names = "0 All\n"
+    # The test classes to use
+    testers = [VXI11_2_Base, VXI11_2_testsrq]
+    # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
+    test_steps = []
+    global_test_nr = 1
+    for tester in testers:
+        tester_steps = tester.testmethods()
+        local_test_nr = 0
+        for step in tester_steps:
+            test_steps.append((tester, step, global_test_nr, local_test_nr))
+            local_test_nr += 1
+            test_names = test_names + f"{global_test_nr} {step}\n"
+            global_test_nr += 1
+
+    parser = argparse.ArgumentParser(description="Test SRQ handling for VXI-11.",
+                                     formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("gateway_ip", type=str, nargs="?", default=DEFAULT_GATEWAY_IP, help="The IP address of the gateway device to use for tests.")
+    parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'")
+    parser.add_argument("-V", "--visa-provider", type=str, default="", choices=VXI11_2_Base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
+    parser.add_argument("-T", "--test", type=int, default=0, choices=range(0, len(test_steps)), help=test_names)
+    parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
     
     args = parser.parse_args()
     
@@ -63,7 +79,7 @@ if __name__ == "__main__":
     addresses = args.addresses
     if isinstance(addresses, int):
         addresses = str(addresses)
-    address_list = VXI11_2_Base.extract_instrument_addresses(addresses)
+    address_list = VXI11_2_Base.validate_instrument_addresses(addresses)
     if address_list is None:
         logger.error(f"Invalid instrument addresses: {addresses}")
         sys.exit(1)
@@ -72,25 +88,19 @@ if __name__ == "__main__":
     gateway_ip = args.gateway_ip
     visa_provider = args.visa_provider
     
-    try:
-        t = VXI11_2_testssrq(visa_provider, gateway_ip, addresses)
-    except Exception as e:
-        logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
-        sys.exit(1) 
-    
+    # determine tests to run
     ok = True
-    logger.info(f"Starting SRQ tests for {len(address_list)} instruments on gateway {gateway_ip}")
-    if test_to_run == 0 or test_to_run == 1:
-        if not t.test_individual_srqs(early_enable=True):
-            ok = False
-        if not t.test_individual_srqs(early_enable=False):
-            ok = False
-    if test_to_run == 0 or test_to_run == 2:
-        if not t.test_one_emitting_srq():
-            ok = False
-    if test_to_run == 0 or test_to_run == 3:
-        if not t.test_multiple_emitting_srq():
-            ok = False
-        
+    for i, (tester, step, global_test_nr, local_test_nr) in enumerate(test_steps):
+        if global_test_nr == test_to_run or test_to_run == 0:
+            try:
+                t = tester(visa_provider, gateway_ip, addresses)
+            except Exception as e:
+                logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
+                sys.exit(1) 
+            
+            if not t.run(local_test_nr):
+                ok = False
+            t.close()
+
     logger.info("All tests completed: " + ("OK" if ok else "FAILED"))
     
