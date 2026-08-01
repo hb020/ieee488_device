@@ -710,10 +710,14 @@ static scpi_in_state_t t3q_handler(uint8_t byte, bool end) {
 
 static scpi_command scpi_commands[] = {
     {"*IDN?", idn_handler},
-    {":SYST:ERR?", err_handler},
+    {":SYST:ERR?", err_handler}, // yeah, this repitition is stupid. Here a better parser would be better. But it is the only case...
     {":SYSTEM:ERR?", err_handler},
     {":SYST:ERROR?", err_handler},
     {":SYSTEM:ERROR?", err_handler},
+    {"SYST:ERR?", err_handler},
+    {"SYSTEM:ERR?", err_handler},
+    {"SYST:ERROR?", err_handler},
+    {"SYSTEM:ERROR?", err_handler},
     {"*RST", rst_handler},
     {"*CLS", cls_handler},
     {"LONGWR?", longwr_handler},

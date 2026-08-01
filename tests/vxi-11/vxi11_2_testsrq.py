@@ -36,14 +36,14 @@ def handle_event(resource, event, srq_user_handle):
         instr_nr = srq_user_handle
     else:
         instr_nr = srq_user_handle.value
-    logger.info(f"Event handler: SRQ received for instrument {instr_nr}")
+    logger.info(f"SRQ Event received for instrument {instr_nr}")
     if event.event_type == pyvisa.constants.EventType.service_request:
         if instr_nr not in srq_called:
-            logger.error(f"Event handler: Unexpected srq_user_handle={instr_nr}")
+            logger.error(f"SRQ Event handler: Unexpected srq_user_handle={instr_nr}")
         else:
             srq_called[instr_nr] = srq_called.get(instr_nr, 0) + 1
     else:
-        logger.error(f"Event handler: Unexpected event {event.event_type} (should be {pyvisa.constants.EventType.service_request}), srq_user_handle={instr_nr}")
+        logger.error(f"SRQ Event handler: Unexpected event {event.event_type} (should be {pyvisa.constants.EventType.service_request}), srq_user_handle={instr_nr}")
 
 
 
@@ -56,23 +56,24 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
 
     def run(self, test: int) -> bool:
         ok = True
-        logger.info(f"Test \"{self.testmethods()[test]}\": Start")
+        testname = f"Test \"{self.testmethods()[test]}\""
+        # logger.info(f"{testname}: Start")  # no need to log, the individual tests will log their own start and end
         if (test == 0):
-            if not self._test_individual_srqs(early_enable=True):
+            if not self._test_individual_srqs(early_enable=True, testname=testname):
                 ok = False
         if (test == 1):
-            if not self._test_individual_srqs(early_enable=False):
+            if not self._test_individual_srqs(early_enable=False, testname=testname):
                 ok = False
         if (test == 2):
-            if not self._test_one_emitting_srq():
+            if not self._test_one_emitting_srq(testname=testname):
                 ok = False
         if (test == 3):
-            if not self._test_multiple_emitting_srq():
+            if not self._test_multiple_emitting_srq(testname=testname):
                 ok = False
-        logger.info(f"Test \"{self.testmethods()[test]}\": {'OK' if ok else 'FAILED'}")
+        # logger.info(f"{testname}: {'OK' if ok else 'FAILED'}")    # no need to log, the individual tests will log their own start and end
         return ok
     
-    def test_instrument(self, inst_nr: int, context: dict, test: int) -> bool:
+    def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
         return False  # Not used, we override run() instead
         
     def prepare_instrument_context(self) -> None:
@@ -278,11 +279,10 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
     ###############################################################################################
     
     # Test SRQ handling for a range of instruments on the bus, one after the other
-    def _test_individual_srqs(self, early_enable: bool) -> bool:
+    def _test_individual_srqs(self, early_enable: bool, testname: str) -> bool:
         retvalue = True
-        test_type = "early enable" if early_enable else "late enable"
                 
-        global_testname = f"Individual SRQ {test_type} test for {len(self._inst_contexts)} instrument{'s' if len(self._inst_contexts) != 1 else ''}"
+        global_testname = f"{testname} for {len(self._inst_contexts)} instrument{'s' if len(self._inst_contexts) != 1 else ''}"
         logger.info(f"{global_testname}: Starting")
         
         self.prepare_instrument_context()
@@ -291,7 +291,6 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            testname = f"Individual SRQ {test_type} test"
             if not self.open_instrument(inst_nr):
                 logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
@@ -331,22 +330,21 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
 
     # Test SRQ handling for a single emitting instrument on the bus, while other instruments are present on the bus, 
     # listening for events, but not emitting SRQ
-    def _test_one_emitting_srq(self) -> bool:
+    def _test_one_emitting_srq(self, testname: str) -> bool:
         test_instrument = 1  # first one, the list is 1 based, not 0 based
         
         if (len(self._inst_contexts) < 2):
-            logger.warning(f"Single emitter SRQ test: only one instrument on the test, cannot test multiple listeners")
+            logger.warning(f"{testname}: only one instrument on the test, cannot test multiple listeners")
             return True
         
         retvalue = True
         
-        global_testname = f"Single emitter SRQ test for {len(self._inst_contexts)} instruments"
+        global_testname = f"{testname} for {len(self._inst_contexts)} instruments"
         logger.info(f"{global_testname}: Starting")
         
         self.prepare_instrument_context()
         testcontext = self._inst_contexts[test_instrument]
         
-        testname = "Single emitter SRQ test"
         # set up all instruments, all listening
         for inst_nr, context in self._inst_contexts.items():
             
@@ -392,7 +390,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                 else:
                     ok, _, nr_intr = self._check_if_had_srq(inst_nr, False, -1, testname, context)
                     if nr_intr > 0:
-                        logger.warning(f"{testname}: SRQ handler called {nr_intr} times for {resource_name}, this gateway likely does not filter SRQ events")
+                        logger.warning(f"{testname}: {nr_intr} SRQ event(s) for {resource_name}, this gateway likely does not filter SRQ events")
 
         for inst_nr, context in self._inst_contexts.items():
             self.close_instrument(inst_nr)
@@ -402,20 +400,19 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
 
 
     # Test SRQ handling for multiple instruments emitting SRQ on the bus, but only one listening for events
-    def _test_multiple_emitting_srq(self) -> bool:
+    def _test_multiple_emitting_srq(self, testname: str) -> bool:
         test_instrument = 1  # first one, the list is 1 based, not 0 based
         
         if (len(self._inst_contexts) < 2):
-            logger.warning(f"Multiple emitter SRQ test: only one instrument on the test, cannot test multiple emitters")
+            logger.warning(f"{testname}: only one instrument on the test, cannot test multiple emitters")
             return True
                 
         retvalue = True
-        global_testname = f"Multiple emitter SRQ test for {len(self._inst_contexts)} instruments"
+        global_testname = f"{testname} for {len(self._inst_contexts)} instruments"
         logger.info(f"{global_testname}: Starting")
         
         self.prepare_instrument_context()
         
-        testname = "Multiple emitter SRQ test"
         # set up all instruments, only one listening
         for inst_nr, context in self._inst_contexts.items():
             
@@ -468,3 +465,4 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             self.close_instrument(inst_nr)
         logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
         return retvalue
+#endregion

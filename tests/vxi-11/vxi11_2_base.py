@@ -244,10 +244,14 @@ class VXI11_2_Base:
         try:
             idn = inst.query("*IDN?").strip()
             if idn == "":
-                idn = inst.query("*ID?").strip()
+                idn = inst.query("*ID?").strip()  # this will have provoked an error to appear in the error queue
         except pyvisa.VisaIOError as e:
             logger.error(f"Failed to query IDN for {resource_name}: {e}")
-            inst.close()
+            try:
+                # This might crash as well...
+                inst.close()
+            except Exception:
+                pass
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             return False
@@ -256,7 +260,7 @@ class VXI11_2_Base:
         context = self.make_instrument_context(inst_nr, idn)
 
         if "cmds_init" not in context or len(context["cmds_init"]) == 0:
-            logger.error(f"No initialization commands for {idn}, cannot run the tests")
+            logger.warning(f"No initialization commands for {resource_name} with IDN \"{idn}\", cannot run the tests for this instrument.")
             inst.close()
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
@@ -271,6 +275,7 @@ class VXI11_2_Base:
         
         It must return at least a dict with the following keys:
         - "cmds_init": a list of commands to initialize the instrument for testing. This is not allowed to be empty.
+        - "cmd_errq": the command to query the error queue of the instrument, after the init. If empty, no error checking will be performed.
 
         :param inst_nr: The instrument number
         :type inst_nr: int
@@ -279,7 +284,58 @@ class VXI11_2_Base:
         :return: a dict with all test specific information for the instrument
         :rtype: dict
         """
-        return { "cmds_init": ["*CLS"]}
+        if "HP859" in idn:
+            # older generation HP8590 series spectrum analyzer
+            return { "cmds_init": ["CLS", "CMDERRQ?"], "cmd_errq": "CMDERRQ?" }  # clear the error queue twice, as I have provoked an error with *IDN?
+        else:
+            return { "cmds_init": ["*CLS"], "cmd_errq": "SYST:ERR?" }
+        
+    def initialize_instrument(self, inst_nr: int, context: dict) -> bool:
+        """Initialize the instrument with the given context.
+
+        :param inst_nr: The instrument number
+        :type inst_nr: int
+        :param context: The instrument context
+        :type context: dict
+        :return: True if the initialization was successful, False otherwise
+        :rtype: bool
+        """
+        inst = context["inst"]
+        cmds_init = context["cmds_init"]
+        for cmd in cmds_init:
+            try:
+                if cmd.endswith("?"):
+                    inst.query(cmd)
+                else:
+                    inst.write(cmd)
+            except pyvisa.VisaIOError as e:
+                logger.error(f"Failed to write command '{cmd}' to instrument {inst_nr}: {e}")
+                return False
+        return self.check_errors(inst_nr, context)
+    
+    def check_errors(self, inst_nr: int, context: dict) -> bool:
+        """Check the error queue of the instrument.
+
+        :param inst_nr: The instrument number
+        :type inst_nr: int
+        :param context: The instrument context
+        :type context: dict
+        :return: True if no errors were found, False otherwise
+        :rtype: bool
+        """
+        if "cmd_errq" in context and context["cmd_errq"]:
+            try:
+                err = context["inst"].query(context["cmd_errq"]).strip()
+                logger.debug(f"Instrument {inst_nr} error queue: {err}")
+                # Check if the error is not "0", "+0", "-0", "No error", or empty
+                # The last one is a special case for the HP8590, which returns an empty string when there are no errors.
+                if not (err.startswith("0") or err.startswith("+0") or err.startswith("-0") or err.startswith("No error") or len(err) == 0):
+                    logger.error(f"Instrument {inst_nr} error: {err}")
+                    return False
+            except pyvisa.VisaIOError as e:
+                logger.error(f"Failed to query error queue for instrument {inst_nr}: {e}")
+                return False
+        return True
     
     def run(self, test: int) -> bool:
         """Run the tests for all instruments in the specified range.
@@ -289,7 +345,8 @@ class VXI11_2_Base:
         :return: True if all tests passed, False otherwise
         :rtype: bool
         """
-        logger.info(f"Test \"{self.testmethods()[test]}\": Start")        
+        testname = f"Test \"{self.testmethods()[test]}\""
+        logger.info(f"{testname}: Start")
         all_passed = True
         for inst_nr, context in self._inst_contexts.items():
             resource_name = context["resource_name"]
@@ -299,25 +356,20 @@ class VXI11_2_Base:
                 all_passed = False
                 continue
             
-            inst = context["inst"]
-            cmds_init = context["cmds_init"]
-            logger.debug(f"Initializing instrument {inst_nr} with commands: {cmds_init}")
-            for cmd in cmds_init:
-                try:
-                    inst.write(cmd)
-                except pyvisa.VisaIOError as e:
-                    logger.error(f"Failed to write command '{cmd}' to instrument {inst_nr}: {e}")
-                    all_passed = False
-                    break
+            if not self.initialize_instrument(inst_nr, context):
+                logger.error(f"Failed to initialize instrument {inst_nr} at {resource_name}")
+                all_passed = False
+                self.close_instrument(inst_nr)
+                continue
             
-            if not self.test_instrument(inst_nr, context, test):
+            if not self.test_instrument(inst_nr, context, test, testname):
                 all_passed = False
         
-        logger.info(f"Test \"{self.testmethods()[test]}\": {'OK' if all_passed else 'FAILED'}")
+        logger.info(f"{testname}: {'OK' if all_passed else 'FAILED'}")
         return all_passed
     
     
-    def test_instrument(self, inst_nr: int, context: dict, test: int) -> bool:
+    def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
         """Run the actual tests for the given instrument number.
         
         This method should be overridden in a subclass to implement specific tests.
@@ -331,10 +383,12 @@ class VXI11_2_Base:
         :type context: dict
         :param test: The test to run. The number is from the index from `testmethods()`.
         :type test: int
+        :param testname: The name of the test
+        :type testname: str
         :return: True if all tests passed, False otherwise
         :rtype: bool
         """
-        logger.debug(f"Running tests for instrument {inst_nr}")
+        logger.debug(f"{testname}: instrument nr {inst_nr}")
         # Implement specific tests here
         return True
 

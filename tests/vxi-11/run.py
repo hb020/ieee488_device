@@ -20,6 +20,7 @@
 #
 from vxi11_2_base import VXI11_2_Base
 from vxi11_2_testsrq import VXI11_2_testsrq
+from vxi11_2_longrd import VXI11_2_longrd
 import logging
 import argparse
 import sys
@@ -44,7 +45,8 @@ if __name__ == "__main__":
     # The names to use for the tests, indexed by test number. The first test is 0, which means all tests.
     test_names = "0 All\n"
     # The test classes to use
-    testers = [VXI11_2_Base, VXI11_2_testsrq]
+    testers = [VXI11_2_Base, VXI11_2_testsrq, VXI11_2_longrd]
+    logger_names = ["vxi11_2_base", "vxi11_2_testsrq", "vxi11_2_longrd"]
     # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
     test_steps = []
     global_test_nr = 1
@@ -62,7 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("gateway_ip", type=str, nargs="?", default=DEFAULT_GATEWAY_IP, help="The IP address of the gateway device to use for tests.")
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'")
     parser.add_argument("-V", "--visa-provider", type=str, default="", choices=VXI11_2_Base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
-    parser.add_argument("-T", "--test", type=int, default=0, choices=range(0, len(test_steps)), help=test_names)
+    parser.add_argument("-T", "--test", type=int, default=0, choices=range(0, len(test_steps)+1), help=test_names)
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
     
     args = parser.parse_args()
@@ -70,11 +72,8 @@ if __name__ == "__main__":
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
     logger.setLevel(log_level)
     # set the log level of all loggers used in this program
-    vxi11_logger = logging.getLogger("vxi11_2_base")
-    vxi11_logger.setLevel(log_level)
-    vxi11_testsrq_logger = logging.getLogger("vxi11_2_testsrq")
-    vxi11_testsrq_logger.setLevel(log_level)
-    # logging.getLogger().setLevel(log_level)   # This would set the root logger level, affecting all loggers. We only want to set this module's logger level.
+    for logger_name in logger_names:
+        logging.getLogger(logger_name).setLevel(log_level)
     
     addresses = args.addresses
     if isinstance(addresses, int):
