@@ -11,7 +11,7 @@
 // This is useful for debugging and configuration, as it gives slightly more freedom than the SCPI interface.
 #define SERIAL_MENU_TIMEOUT_S 2
 
-#define DEFAULT_DEBUG_LEVEL 1 
+#define DEFAULT_DEBUG_LEVEL 0
 
 #define DEFAULT_PRIMARY_ADDRESS 5
 #define DEFAULT_SECONDARY_ADDRESS 1

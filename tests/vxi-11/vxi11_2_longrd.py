@@ -72,13 +72,17 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         if "HP859" in idn:
             cmd_read = "USTATE?"
             check_reply_function = self.check_reply_hp8590
-            check_reply_len = 0            
+            check_reply_len = 0           
         if "ieee488_device" in idn:
-            datalen = 20000
+            datalen = 500000
             cmd_read = f"LONGRD? {datalen}"
             check_reply_function = self.check_reply_ieee488_device
             check_reply_len = datalen
 
+        if check_reply_function is None:
+            logger.error(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for long read test")
+            return {}
+        
         ret.update({"cmds_init": cmds_init, "cmd_read": cmd_read, "check_reply_function": check_reply_function, "check_reply_len": check_reply_len})
         return ret
     
@@ -130,9 +134,14 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         :return: True if the reply is valid, False otherwise
         :rtype: bool        
         """
-        # The reply should be a comma-separated list of floats, with length equal to expected_len
+        # The reply should be a custom sequential list of length expected_len
         inst = context["inst"]
-        inst.timeout = 10000  # set a longer timeout for this test, as the device might take some time to respond
+        # allow 1ms per character in device debug mode
+        # else: 140us per character on a atmega4809, with overhead
+        # timeout is in ms
+        inst.timeout = expected_len * 0.2  # non-debug mode
+        if expected_len > 20000:
+            inst.chunk_size = expected_len + 1000  # increase chunk size for large reads
         try:
             reply = inst.query(cmd_read)
             logger.debug(f"instrument nr {inst_nr}: received reply: {reply}")
