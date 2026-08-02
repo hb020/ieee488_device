@@ -106,25 +106,25 @@ class VXI11_2_Base(object):
             return None
         addresses = inst_addresses.split(';')
         if (len(addresses) == 0):
-            self.logger.error("No instrument addresses specified")
+            logger.error("No instrument addresses specified")
             return None
         for addr in addresses:
             parts = addr.split(',')
             if len(parts) == 0 or len(parts) > 2:
-                self.logger.error(f"Invalid instrument address format: {addr}")
+                logger.error(f"Invalid instrument address format: {addr}")
                 return None
             try:
                 primary = int(parts[0])
                 if primary < 0 or primary > 30:
-                    self.logger.error(f"Invalid primary address: {primary}")
+                    logger.error(f"Invalid primary address: {primary}")
                     return None
                 if len(parts) == 2:
                     secondary = int(parts[1])
                     if secondary < 0 or secondary > 30:
-                        self.logger.error(f"Invalid secondary address: {secondary}")
+                        logger.error(f"Invalid secondary address: {secondary}")
                         return None
             except ValueError:
-                self.logger.error(f"Invalid instrument address format: {addr}")
+                logger.error(f"Invalid instrument address format: {addr}")
                 return None
         return addresses
     
