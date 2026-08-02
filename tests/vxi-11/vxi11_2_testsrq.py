@@ -57,7 +57,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
     def run(self, test: int) -> bool:
         ok = True
         testname = f"Test \"{self.testmethods()[test]}\""
-        # logger.info(f"{testname}: Start")  # no need to log, the individual tests will log their own start and end
+        # self.logger.info(f"{testname}: Start")  # no need to log, the individual tests will log their own start and end
         if (test == 0):
             if not self._test_individual_srqs(early_enable=True, testname=testname):
                 ok = False
@@ -70,7 +70,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         if (test == 3):
             if not self._test_multiple_emitting_srq(testname=testname):
                 ok = False
-        # logger.info(f"{testname}: {'OK' if ok else 'FAILED'}")    # no need to log, the individual tests will log their own start and end
+        # self.logger.info(f"{testname}: {'OK' if ok else 'FAILED'}")    # no need to log, the individual tests will log their own start and end
         return ok
     
     def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
@@ -152,17 +152,17 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             
         cmds = context["cmds_init"]
         for cmd in cmds:
-            # logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
+            # self.logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
             if cmd.endswith("?"):
                 resp = inst.query(cmd)
-                # logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
+                # self.logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
             else:
                 inst.write(cmd)
             sleep(0.1)
         try:
             inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
         except Exception as e:
-            logger.debug(f"Failed to set REN line for {resource_name}: {e}")
+            self.logger.debug(f"Failed to set REN line for {resource_name}: {e}")
             
         return super().close_instrument(inst_nr)
 
@@ -172,21 +172,21 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         resource_name = context["resource_name"]
         
         for cmd in cmds:
-            # logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
+            # self.logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
             if cmd.endswith("?"):
                 resp = inst.query(cmd)
-                # logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
+                # self.logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
             else:
                 inst.write(cmd)
             sleep(0.1)
             
         stb = inst.read_stb()
         if stb != 0:
-            logger.error(f"Programming error: STB not 0 after init for {resource_name}, STB=0x{stb:02X}")
+            self.logger.error(f"Programming error: STB not 0 after init for {resource_name}, STB=0x{stb:02X}")
             return False
         
         if srq_called.get(inst_nr, 0) != 0:
-            logger.error(f"Programming error: SRQ handler got called {srq_called.get(inst_nr, 0)} times BEFORE init for {resource_name}")
+            self.logger.error(f"Programming error: SRQ handler got called {srq_called.get(inst_nr, 0)} times BEFORE init for {resource_name}")
             return False
         srq_called[inst_nr] = 0
         return True
@@ -196,7 +196,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
     ###############################################################################################
 
     def _enable_listen_for_srq(self, inst_nr: int, context: dict) -> bool:
-        logger.debug(f"Enabling SRQ listening for instrument {inst_nr}")
+        self.logger.debug(f"Enabling SRQ listening for instrument {inst_nr}")
         inst = context["inst"]
         
         event_type = pyvisa.constants.EventType.service_request
@@ -211,7 +211,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         return True
 
     def _emit_srq(self, inst_nr: int, context: dict) -> bool:
-        logger.debug(f"Emitting SRQ for instrument {inst_nr}")
+        self.logger.debug(f"Emitting SRQ for instrument {inst_nr}")
         inst = context["inst"]
         cmds_srq_provoke = context["cmds_srq_provoke"]
         inst.write(cmds_srq_provoke)
@@ -220,23 +220,23 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
 
     def _wait_srq_for_instr(self, inst_nr: int, context: dict) -> bool:
         if EVENT_MECH == pyvisa.constants.EventMechanism.handler:
-            logger.debug(f"Waiting for SRQ for instrument {inst_nr} (handler mechanism)")
+            self.logger.debug(f"Waiting for SRQ for instrument {inst_nr} (handler mechanism)")
             for i in range(int(SRQ_WAIT_TIME * 10)):
                 if srq_called.get(inst_nr, 0) != 0:
                     break
                 sleep(0.1)
-            logger.debug(f"Finished waiting for SRQ for instrument {inst_nr} (handler mechanism)")
+            self.logger.debug(f"Finished waiting for SRQ for instrument {inst_nr} (handler mechanism)")
             return True
         else:
-            logger.debug(f"Waiting for SRQ for instrument {inst_nr} (queue mechanism)")
+            self.logger.debug(f"Waiting for SRQ for instrument {inst_nr} (queue mechanism)")
             inst = context["inst"]
             event_type = pyvisa.constants.EventType.service_request
             try:
                 event = inst.wait_on_event(event_type, timeout=int(SRQ_WAIT_TIME * 1000))
-                logger.debug(f"Finished waiting for SRQ for instrument {inst_nr} (queue mechanism), event={event}")
+                self.logger.debug(f"Finished waiting for SRQ for instrument {inst_nr} (queue mechanism), event={event}")
                 srq_called[inst_nr] = srq_called.get(inst_nr, 0) + 1
             except pyvisa.VisaIOError as e:
-                logger.debug(f"Failed to wait for SRQ for instrument {inst_nr}: {e}")
+                self.logger.debug(f"Failed to wait for SRQ for instrument {inst_nr}: {e}")
                 return True
         return True
 
@@ -261,16 +261,16 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         stb1_has_srq = stb1 & 0x40
         stb2_has_srq = stb2 & 0x40
         if expected_SRQ and stb1_has_srq == 0:
-            logger.error(f"{testname}: STB did not have SRQ bit set on {resource_name}, returned STB=0x{stb1:02X}")
+            self.logger.error(f"{testname}: STB did not have SRQ bit set on {resource_name}, returned STB=0x{stb1:02X}")
             return False, stb1_has_srq != 0, called_nr
         if expected_calls >= 0 and called_nr != expected_calls:
-            logger.error(f"{testname}: SRQ received {called_nr} times for {resource_name}, expected {expected_calls} times")
+            self.logger.error(f"{testname}: SRQ received {called_nr} times for {resource_name}, expected {expected_calls} times")
             return False, stb1_has_srq != 0, called_nr
         if not expected_SRQ and stb1_has_srq != 0:
-            logger.error(f"{testname}: STB had SRQ bit set on {resource_name}, returned STB=0x{stb1:02X}")
+            self.logger.error(f"{testname}: STB had SRQ bit set on {resource_name}, returned STB=0x{stb1:02X}")
             return False, stb1_has_srq != 0, called_nr    
         if stb2_has_srq != 0:
-            logger.error(f"{testname}: STB still has SRQ bit set after reading STB from {resource_name}, returned STB=0x{stb2:02X}")
+            self.logger.error(f"{testname}: STB still has SRQ bit set after reading STB from {resource_name}, returned STB=0x{stb2:02X}")
             return False, stb1_has_srq != 0, called_nr
         return True, stb1_has_srq != 0, called_nr
 
@@ -283,7 +283,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         retvalue = True
                 
         global_testname = f"{testname} for {len(self._inst_contexts)} instrument{'s' if len(self._inst_contexts) != 1 else ''}"
-        logger.info(f"{global_testname}: Starting")
+        self.logger.info(f"{global_testname}: Starting")
         
         self.prepare_instrument_context()
                 
@@ -292,40 +292,40 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             this_instrument_ok = True
             resource_name = context["resource_name"]
             if not self.open_instrument(inst_nr):
-                logger.error(f"{testname}: Failed to open {resource_name}")
+                self.logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
                 continue;
 
             if this_instrument_ok:
                 if not self._prepare_to_listen_for_srq(inst_nr, context):
-                    logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
                     this_instrument_ok = False
             if this_instrument_ok:
                 if early_enable:
                     if not self._enable_listen_for_srq(inst_nr, context):
-                        logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                        self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
                         this_instrument_ok = False
             if this_instrument_ok:
                 if not self._emit_srq(inst_nr, context):
-                    logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
                     this_instrument_ok = False
             if this_instrument_ok:
                 if not early_enable:
                     if not self._enable_listen_for_srq(inst_nr, context):
-                        logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                        self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
                         this_instrument_ok = False
             if this_instrument_ok:
                 if not self._wait_srq_for_instr(inst_nr, context):
-                    logger.error(f"{testname}: Failed to wait for SRQ for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to wait for SRQ for {resource_name}")
                     this_instrument_ok = False
             if this_instrument_ok:
                 this_instrument_ok, _, _ = self._check_if_had_srq(inst_nr, True, 1, testname, context)
             self.close_instrument(inst_nr)
             if this_instrument_ok:
-                logger.info(f"{testname}: {resource_name} is OK")
+                self.logger.info(f"{testname}: {resource_name} is OK")
             else:
                 retvalue = False
-        logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
+        self.logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
         return retvalue
 
     # Test SRQ handling for a single emitting instrument on the bus, while other instruments are present on the bus, 
@@ -334,13 +334,13 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         test_instrument = 1  # first one, the list is 1 based, not 0 based
         
         if (len(self._inst_contexts) < 2):
-            logger.warning(f"{testname}: only one instrument on the test, cannot test multiple listeners")
+            self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple listeners")
             return True
         
         retvalue = True
         
         global_testname = f"{testname} for {len(self._inst_contexts)} instruments"
-        logger.info(f"{global_testname}: Starting")
+        self.logger.info(f"{global_testname}: Starting")
         
         self.prepare_instrument_context()
         testcontext = self._inst_contexts[test_instrument]
@@ -351,17 +351,17 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             this_instrument_ok = True
             resource_name = context["resource_name"]
             if not self.open_instrument(inst_nr):
-                logger.error(f"{testname}: Failed to open {resource_name}")
+                self.logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
                 continue;
 
             if this_instrument_ok:
                 if not self._prepare_to_listen_for_srq(inst_nr, context):
-                    logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
                     this_instrument_ok = False
             if this_instrument_ok:
                 if not self._enable_listen_for_srq(inst_nr, context):
-                    logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
                     this_instrument_ok = False
             if not this_instrument_ok:
                 retvalue = False
@@ -370,7 +370,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         if retvalue:
             resource_name = testcontext["resource_name"]
             if not self._emit_srq(test_instrument, testcontext):
-                logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
+                self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
                 retvalue = False
                 
         # Check results: only the emitting instrument should have had SRQ, the others should not have had SRQ
@@ -390,12 +390,12 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                 else:
                     ok, _, nr_intr = self._check_if_had_srq(inst_nr, False, -1, testname, context)
                     if nr_intr > 0:
-                        logger.warning(f"{testname}: {nr_intr} SRQ event(s) for {resource_name}, this gateway likely does not filter SRQ events")
+                        self.logger.warning(f"{testname}: {nr_intr} SRQ event(s) for {resource_name}, this gateway likely does not filter SRQ events")
 
         for inst_nr, context in self._inst_contexts.items():
             self.close_instrument(inst_nr)
             
-        logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
+        self.logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
         return retvalue
 
 
@@ -404,12 +404,12 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         test_instrument = 1  # first one, the list is 1 based, not 0 based
         
         if (len(self._inst_contexts) < 2):
-            logger.warning(f"{testname}: only one instrument on the test, cannot test multiple emitters")
+            self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple emitters")
             return True
                 
         retvalue = True
         global_testname = f"{testname} for {len(self._inst_contexts)} instruments"
-        logger.info(f"{global_testname}: Starting")
+        self.logger.info(f"{global_testname}: Starting")
         
         self.prepare_instrument_context()
         
@@ -420,18 +420,18 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             resource_name = context["resource_name"]
             
             if not self.open_instrument(inst_nr):
-                logger.error(f"{testname}: Failed to open {resource_name}")
+                self.logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
                 continue;
 
             if this_instrument_ok:
                 if not self._prepare_to_listen_for_srq(inst_nr, context):
-                    logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
                     this_instrument_ok = False
             if this_instrument_ok:
                 if inst_nr == test_instrument:
                     if not self._enable_listen_for_srq(inst_nr, context):
-                        logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                        self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
                         this_instrument_ok = False
             if not this_instrument_ok:
                 retvalue = False
@@ -441,7 +441,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             for inst_nr, context in self._inst_contexts.items():            
                 resource_name = context["resource_name"]
                 if not self._emit_srq(inst_nr, context):
-                    logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
+                    self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
                     retvalue = False
         
         # All should have SRQ bit set, but only the listening instrument should have had SRQ call
@@ -463,6 +463,6 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
 
         for inst_nr, context in self._inst_contexts.items():
             self.close_instrument(inst_nr)
-        logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
+        self.logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
         return retvalue
 #endregion

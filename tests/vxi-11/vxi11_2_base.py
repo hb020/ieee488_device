@@ -32,12 +32,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)
 #endregion  
 
-
 #region test base class
-class VXI11_2_Base:
+class VXI11_2_Base(object):
     """
     Base class for VXI-11 tests.
     """
+    @property
+    def logger(self):
+        return logging.getLogger(f"{self.__class__.__name__}")
     
     def __init__(self, visa_provider: Optional[str], gateway_ip: str, inst_addresses: str):
         """Initialize the VXI-11.2 base test case.
@@ -62,7 +64,7 @@ class VXI11_2_Base:
         self.visa_provider = visa_provider
         self._inst_contexts = {}
         self.rm, self.visa_provider = self.get_resource_manager(visa_provider)
-        logger.debug(f"Using VISA provider: {self.visa_provider}")
+        self.logger.debug(f"Using VISA provider: {self.visa_provider}")
         self.prepare_instrument_context()
 
     @classmethod
@@ -104,25 +106,25 @@ class VXI11_2_Base:
             return None
         addresses = inst_addresses.split(';')
         if (len(addresses) == 0):
-            logger.error("No instrument addresses specified")
+            self.logger.error("No instrument addresses specified")
             return None
         for addr in addresses:
             parts = addr.split(',')
             if len(parts) == 0 or len(parts) > 2:
-                logger.error(f"Invalid instrument address format: {addr}")
+                self.logger.error(f"Invalid instrument address format: {addr}")
                 return None
             try:
                 primary = int(parts[0])
                 if primary < 0 or primary > 30:
-                    logger.error(f"Invalid primary address: {primary}")
+                    self.logger.error(f"Invalid primary address: {primary}")
                     return None
                 if len(parts) == 2:
                     secondary = int(parts[1])
                     if secondary < 0 or secondary > 30:
-                        logger.error(f"Invalid secondary address: {secondary}")
+                        self.logger.error(f"Invalid secondary address: {secondary}")
                         return None
             except ValueError:
-                logger.error(f"Invalid instrument address format: {addr}")
+                self.logger.error(f"Invalid instrument address format: {addr}")
                 return None
         return addresses
     
@@ -195,7 +197,7 @@ class VXI11_2_Base:
         """
         inst_nr = 0
         if not hasattr(self, 'inst_addresses') or self.inst_addresses is None:
-            logger.error("No instrument addresses specified")
+            self.logger.error("No instrument addresses specified")
             return
         for addr in self.inst_addresses:
             inst_nr += 1  # list is 1 based, not 0 based
@@ -222,21 +224,21 @@ class VXI11_2_Base:
         
     def open_instrument(self, inst_nr: int) -> bool:
         if not hasattr(self, 'rm') or self.rm is None:
-            logger.error("Resource manager is not initialized")
+            self.logger.error("Resource manager is not initialized")
             return False
         
         resource_name = self._inst_contexts[inst_nr]["resource_name"]
         try:
             inst = self.rm.open_resource(resource_name)
         except Exception as e:
-            logger.error(f"Failed to open {resource_name}: {e}")
+            self.logger.error(f"Failed to open {resource_name}: {e}")
             return False
         inst.timeout = 1000
         if inst is None or not (
                 isinstance(inst, pyvisa.resources.TCPIPInstrument) or 
                 isinstance(inst, pyvisa.resources.GPIBInstrument) or
                 isinstance(inst, pyvisa.resources.USBInstrument)):
-            logger.error(f"Failed to open {resource_name}")
+            self.logger.error(f"Failed to open {resource_name}")
             return False
         
         self._inst_contexts[inst_nr]["opened"] = True
@@ -246,7 +248,7 @@ class VXI11_2_Base:
             if idn == "":
                 idn = inst.query("*ID?").strip()  # this will have provoked an error to appear in the error queue
         except pyvisa.VisaIOError as e:
-            logger.error(f"Failed to query IDN for {resource_name}: {e}")
+            self.logger.error(f"Failed to query IDN for {resource_name}: {e}")
             try:
                 # This might crash as well...
                 inst.close()
@@ -255,12 +257,12 @@ class VXI11_2_Base:
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             return False
-        # logger.debug(f"IDN: {idn}")
+        # self.logger.debug(f"IDN: {idn}")
         
         context = self.make_instrument_context(inst_nr, idn)
 
         if "cmds_init" not in context or len(context["cmds_init"]) == 0:
-            logger.warning(f"No initialization commands for {resource_name} with IDN \"{idn}\", cannot run the tests for this instrument.")
+            self.logger.warning(f"No initialization commands for {resource_name} with IDN \"{idn}\", cannot run the tests for this instrument.")
             inst.close()
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
@@ -309,7 +311,7 @@ class VXI11_2_Base:
                 else:
                     inst.write(cmd)
             except pyvisa.VisaIOError as e:
-                logger.error(f"Failed to write command '{cmd}' to instrument {inst_nr}: {e}")
+                self.logger.error(f"Failed to write command '{cmd}' to instrument {inst_nr}: {e}")
                 return False
         return self.check_errors(inst_nr, context)
     
@@ -326,14 +328,14 @@ class VXI11_2_Base:
         if "cmd_errq" in context and context["cmd_errq"]:
             try:
                 err = context["inst"].query(context["cmd_errq"]).strip()
-                logger.debug(f"Instrument {inst_nr} error queue: {err}")
+                self.logger.debug(f"Instrument {inst_nr} error queue: {err}")
                 # Check if the error is not "0", "+0", "-0", "No error", or empty
                 # The last one is a special case for the HP8590, which returns an empty string when there are no errors.
                 if not (err.startswith("0") or err.startswith("+0") or err.startswith("-0") or err.startswith("No error") or len(err) == 0):
-                    logger.error(f"Instrument {inst_nr} error: {err}")
+                    self.logger.error(f"Instrument {inst_nr} error: {err}")
                     return False
             except pyvisa.VisaIOError as e:
-                logger.error(f"Failed to query error queue for instrument {inst_nr}: {e}")
+                self.logger.error(f"Failed to query error queue for instrument {inst_nr}: {e}")
                 return False
         return True
     
@@ -346,18 +348,18 @@ class VXI11_2_Base:
         :rtype: bool
         """
         testname = f"Test \"{self.testmethods()[test]}\""
-        logger.info(f"{testname}: Start")
+        self.logger.info(f"{testname}: Start")
         all_passed = True
         for inst_nr, context in self._inst_contexts.items():
             resource_name = context["resource_name"]
-            logger.info(f"Connecting to instrument {inst_nr} at {resource_name}")
+            self.logger.info(f"Connecting to instrument {inst_nr} at {resource_name}")
             if not self.open_instrument(inst_nr):
-                logger.error(f"Failed to setup instrument {inst_nr} at {resource_name}")
+                self.logger.error(f"Failed to setup instrument {inst_nr} at {resource_name}")
                 all_passed = False
                 continue
             
             if not self.initialize_instrument(inst_nr, context):
-                logger.error(f"Failed to initialize instrument {inst_nr} at {resource_name}")
+                self.logger.error(f"Failed to initialize instrument {inst_nr} at {resource_name}")
                 all_passed = False
                 self.close_instrument(inst_nr)
                 continue
@@ -365,7 +367,7 @@ class VXI11_2_Base:
             if not self.test_instrument(inst_nr, context, test, testname):
                 all_passed = False
         
-        logger.info(f"{testname}: {'OK' if all_passed else 'FAILED'}")
+        self.logger.info(f"{testname}: {'OK' if all_passed else 'FAILED'}")
         return all_passed
     
     
@@ -388,7 +390,7 @@ class VXI11_2_Base:
         :return: True if all tests passed, False otherwise
         :rtype: bool
         """
-        logger.debug(f"{testname}: instrument nr {inst_nr}")
+        self.logger.debug(f"{testname}: instrument nr {inst_nr}")
         # Implement specific tests here
         return True
 

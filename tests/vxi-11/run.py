@@ -21,6 +21,7 @@
 from vxi11_2_base import VXI11_2_Base
 from vxi11_2_testsrq import VXI11_2_testsrq
 from vxi11_2_longrd import VXI11_2_longrd
+from vxi11_2_longwr import VXI11_2_longwr
 import logging
 import argparse
 import sys
@@ -37,7 +38,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
-# Set log level for this module
+
     
 if __name__ == "__main__":
     # Parse command line arguments
@@ -45,8 +46,9 @@ if __name__ == "__main__":
     # The names to use for the tests, indexed by test number. The first test is 0, which means all tests.
     test_names = "0 All\n"
     # The test classes to use
-    testers = [VXI11_2_Base, VXI11_2_testsrq, VXI11_2_longrd]
-    logger_names = ["vxi11_2_base", "vxi11_2_testsrq", "vxi11_2_longrd"]
+    testers = [VXI11_2_Base, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr]
+    # the file names. Not much logging in their name, but anyway.
+    logger_names = ["vxi11_2_base", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr"]
     # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
     test_steps = []
     global_test_nr = 1
@@ -68,10 +70,15 @@ if __name__ == "__main__":
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
     
     args = parser.parse_args()
-    
+    # set log levels
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
-    logger.setLevel(log_level)
     # set the log level of all loggers used in this program
+    # set my log level
+    logger.setLevel(log_level)
+    # The test classes gave their own loggers.
+    for tester in testers:
+        logging.getLogger(f"{tester.__name__}").setLevel(log_level)
+    # The files themselves also have loggers for various stuff.
     for logger_name in logger_names:
         logging.getLogger(logger_name).setLevel(log_level)
     

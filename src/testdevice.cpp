@@ -317,7 +317,7 @@ static scpi_in_state_t rst_handler(uint8_t byte, bool end) {
 /* `LONGWR? {ASCII data}` */
 typedef enum {LONGWR_STARTING, LONGWR_RECEIVING, LONGWR_TRAILING, LONGWR_FLUSH} longwr_state_t;
 static longwr_state_t longwr_state = LONGWR_STARTING;
-static size_t longwr_counter = 0;  // The number of bytes received in the long write operation
+static uint32_t longwr_counter = 0;  // The number of bytes received in the long write operation
 static uint8_t longwr_start;  // The start character of the long write data
 static uint8_t longwr_lastchar;  // The last character received in the long write operation
 static char longwr_errmsg[128];  // Buffer for error messages
