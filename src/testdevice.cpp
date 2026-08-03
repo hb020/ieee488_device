@@ -4,8 +4,7 @@
 #include "ieee488.h"
 
 #define LONG_MAX_MS 10800000  // 3 hours in milliseconds
-#define SHORT_MAX_MS 10000     // 10 seconds in milliseconds
-
+#define SHORT_MAX_MS 10000    // 10 seconds in milliseconds
 
 // stuff from main.cpp that we need to access here
 extern int debug_level;
@@ -60,7 +59,6 @@ struct scpi_command {
 // Only means something when scpi_in_state is SCPI_FINISHING_COMMAND or SCPI_STREAM.
 // 255 means no command recognized yet.
 static uint8_t scpi_command_idx = 255;
-
 
 static uint32_t rx_deadline = 0;  // the time by which the next rx action can continue, in milliseconds. 0 means no delay is active. This is used to implement the rx_delay_ms feature.
 
@@ -153,10 +151,10 @@ void restart_out(void) {
     tx_arm_delay(true);  // arm the tx delay timer for the reply delay, if configured
 }
 
-/** @brief Get the end characters for SCPI messages. 
+/** @brief Get the end characters for SCPI messages.
  * @return The end characters, either the EOS byte if enabled, or "\r\n" if not.
-*/
-const char *endchars(void) {
+ */
+const char* endchars(void) {
     static char eos_char[2] = {0, 0};  // buffer to hold the EOS character and null terminator
     if (cfg.eos_enabled) {
         eos_char[0] = cfg.eos_byte;
@@ -167,19 +165,19 @@ const char *endchars(void) {
 }
 
 /** @brief Parse a string of space separated uint32_t integers from in_buffer and fill the values array.
- * 
+ *
  * The values are expected to be in decimal format, separated by whitespace.
- * The first word in the string is to be ignored. 
- * in_buffer has no leading whitespace, but can have trailing whitespace 
+ * The first word in the string is to be ignored.
+ * in_buffer has no leading whitespace, but can have trailing whitespace
  * and multiple spaces between the values.
- * 
+ *
  * @param values Pointer to an array of uint32_t to be filled with the parsed values
  * @param num_values The number of values to parse and fill in the values array
- * @param allowed_separators A string of characters that are allowed as single char separators between values (space is always allowed). 
+ * @param allowed_separators A string of characters that are allowed as single char separators between values (space is always allowed).
  *        If NULL, only whitespace is allowed.
  * @return the number of values read
  */
-int get_uint32_varvalues(uint32_t* values, size_t num_values, const char *allowed_separators) {
+int get_uint32_varvalues(uint32_t* values, size_t num_values, const char* allowed_separators) {
     const char* ptr = in_buffer;
     int values_found = 0;
     if (!values) return 0;
@@ -212,12 +210,12 @@ int get_uint32_varvalues(uint32_t* values, size_t num_values, const char *allowe
 }
 
 /** @brief Parse a string of space separated uint32_t integers from in_buffer and fill the values array.
- * 
+ *
  * The values are expected to be in decimal format, separated by whitespace.
- * The first word in the string is to be ignored. 
- * in_buffer has no leading whitespace, but can have trailing whitespace 
+ * The first word in the string is to be ignored.
+ * in_buffer has no leading whitespace, but can have trailing whitespace
  * and multiple spaces between the values.
- * 
+ *
  * @param values Pointer to an array of uint32_t to be filled with the parsed values
  * @param num_values The number of values to parse and fill in the values array
  * @return the number of values read
@@ -235,7 +233,7 @@ int get_uint32_varvalues(uint32_t* values, size_t num_values) {
  * The functions are called after the first command word is received, in SCPI_RECEIVING_COMMAND state.
  * They return the next wanted scpi_in_state.
  *
- * They all have 2 parameters: 
+ * They all have 2 parameters:
  *    - byte, which is the received byte
  *    - end, which is true if this is the last byte of the message, false otherwise.
  * They all return the next scpi_in_state_t value
@@ -290,14 +288,14 @@ static scpi_in_state_t err_handler(uint8_t byte, bool end) {
 static scpi_in_state_t cls_handler(uint8_t byte, bool end) {
     // This is the *CLS command handler.
     // It clears the error queue of the device.
-    (void)byte;                    // Unused parameter
-    (void)end;                     // Unused parameter
-    scpi_error_state = SCPI_NONE;  // Clear the error state
-    restart_in();                  // Clear the input buffer
-    restart_out();                 // Clear the output buffer
-    rx_deadline = 0;               // Clear the RX delay
-    tx_deadline = 0;               // Clear the TX delay
-    srq_deadline = 0;              // Clear the SRQ delay
+    (void)byte;                      // Unused parameter
+    (void)end;                       // Unused parameter
+    scpi_error_state = SCPI_NONE;    // Clear the error state
+    restart_in();                    // Clear the input buffer
+    restart_out();                   // Clear the output buffer
+    rx_deadline = 0;                 // Clear the RX delay
+    tx_deadline = 0;                 // Clear the TX delay
+    srq_deadline = 0;                // Clear the SRQ delay
     ieee488_request_service(false);  // Clear the SRQ line to the controller
     return SCPI_FLUSH;
 }
@@ -306,8 +304,8 @@ static scpi_in_state_t cls_handler(uint8_t byte, bool end) {
 static scpi_in_state_t rst_handler(uint8_t byte, bool end) {
     // This is the *RST command handler.
     // It resets the device to its default state.
-    (void)byte;  // Unused parameter
-    (void)end;   // Unused parameter
+    (void)byte;              // Unused parameter
+    (void)end;               // Unused parameter
     cls_handler(byte, end);  // Clear the error state and buffers
     load_config(false);
 
@@ -315,12 +313,15 @@ static scpi_in_state_t rst_handler(uint8_t byte, bool end) {
 }
 
 /* `LONGWR? {ASCII data}` */
-typedef enum {LONGWR_STARTING, LONGWR_RECEIVING, LONGWR_TRAILING, LONGWR_FLUSH} longwr_state_t;
+typedef enum { LONGWR_STARTING,
+               LONGWR_RECEIVING,
+               LONGWR_TRAILING,
+               LONGWR_FLUSH } longwr_state_t;
 static longwr_state_t longwr_state = LONGWR_STARTING;
 static uint32_t longwr_counter = 0;  // The number of bytes received in the long write operation
-static uint8_t longwr_start;  // The start character of the long write data
-static uint8_t longwr_lastchar;  // The last character received in the long write operation
-static char longwr_errmsg[128];  // Buffer for error messages
+static uint8_t longwr_start;         // The start character of the long write data
+static uint8_t longwr_lastchar;      // The last character received in the long write operation
+static char longwr_errmsg[128];      // Buffer for error messages
 
 static void longwr_create_reply(void) {
     restart_out();
@@ -331,10 +332,7 @@ static void longwr_create_reply(void) {
     }
 }
 
-
 static scpi_in_state_t longwr_handler(uint8_t byte, bool end) {
-
-
     // This is the LONGWR command handler.
     // It sets the device to long write mode.
     (void)byte;  // Unused parameter
@@ -342,7 +340,7 @@ static scpi_in_state_t longwr_handler(uint8_t byte, bool end) {
     if (scpi_in_state == SCPI_RECEIVING_COMMAND) {
         // The first word of the command has been received
         longwr_counter = 0;
-        longwr_start = 0; 
+        longwr_start = 0;
         longwr_lastchar = 0;
         longwr_errmsg[0] = '\0';  // Clear any error message
         longwr_state = LONGWR_STARTING;
@@ -410,12 +408,11 @@ static scpi_in_state_t longwr_handler(uint8_t byte, bool end) {
     return SCPI_STREAM;
 }
 
-
-static uint32_t longrd_len = 0;  // The length of the long read data still to be sent
+static uint32_t longrd_len = 0;   // The length of the long read data still to be sent
 static uint8_t longrd_ch = 0x30;  // The next character of the long read data to be sent
 
 /* `LONGRD? [{LEN} [{START}]]` */
-static scpi_in_state_t longrd_handler(uint8_t byte, bool end) {    
+static scpi_in_state_t longrd_handler(uint8_t byte, bool end) {
     // This is the LONGRD command handler.
     // It sets the device to long read mode.
     (void)byte;  // Unused parameter
@@ -449,7 +446,7 @@ static scpi_in_state_t longrd_handler(uint8_t byte, bool end) {
 }
 
 /** @brief Transmit the next byte for a long read operation.
- * @return The next byte of the long read data, or 0 if the long read is finished, and the terminator is to be sent. 
+ * @return The next byte of the long read data, or 0 if the long read is finished, and the terminator is to be sent.
  *         In that case, the transmit can continue from the regular out buffer.
  */
 static uint8_t longrd_tx(void) {
@@ -471,8 +468,6 @@ static uint8_t longrd_tx(void) {
     }
 }
 
-
-
 /* `SLOWWR {MSECS}` */
 static scpi_in_state_t slowwr_handler(uint8_t byte, bool end) {
     // This is the SLOWWR command handler.
@@ -488,7 +483,7 @@ static scpi_in_state_t slowwr_handler(uint8_t byte, bool end) {
     }
     if (value > SHORT_MAX_MS) {
         value = SHORT_MAX_MS;  // Limit to 10 seconds
-    }    
+    }
     cfg.rx_delay_ms = value;
     return SCPI_FLUSH;
 }
@@ -507,7 +502,7 @@ static scpi_in_state_t slowrd_handler(uint8_t byte, bool end) {
     }
     if (value > SHORT_MAX_MS) {
         value = SHORT_MAX_MS;  // Limit to 10 seconds
-    }    
+    }
     cfg.tx_delay_ms = value;
     return SCPI_FLUSH;
 }
@@ -535,7 +530,7 @@ static scpi_in_state_t delayrd_handler(uint8_t byte, bool end) {
 /* `SLOWWR?` */
 static scpi_in_state_t slowwrq_handler(uint8_t byte, bool end) {
     // This is the SLOWWR? command handler.
-    (void)byte;  // Unused parameter
+    (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
     restart_out();
@@ -546,7 +541,7 @@ static scpi_in_state_t slowwrq_handler(uint8_t byte, bool end) {
 /* `SLOWRD?` */
 static scpi_in_state_t slowrdq_handler(uint8_t byte, bool end) {
     // This is the SLOWRD? command handler.
-    (void)byte;  // Unused parameter
+    (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
     restart_out();
@@ -557,7 +552,7 @@ static scpi_in_state_t slowrdq_handler(uint8_t byte, bool end) {
 /* `DELAYRD?` */
 static scpi_in_state_t delayrdq_handler(uint8_t byte, bool end) {
     // This is the DELAYRD? command handler.
-    (void)byte;  // Unused parameter
+    (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
     restart_out();
@@ -567,9 +562,9 @@ static scpi_in_state_t delayrdq_handler(uint8_t byte, bool end) {
 
 /* `SRQ [{MSECS}]` */
 static scpi_in_state_t srq_handler(uint8_t byte, bool end) {
-    (void)byte;  // Unused parameter
+    (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
-    
+
     uint32_t value;
     if (get_uint32_varvalues(&value, 1) != 1) {
         value = 0;  // Default to 0 if no parameter is provided
@@ -583,9 +578,9 @@ static scpi_in_state_t srq_handler(uint8_t byte, bool end) {
 
 /* `ADDR {PRIMARY}[,{SECONDARY}]` (with allowed separators ",:. ") */
 static scpi_in_state_t addr_handler(uint8_t byte, bool end) {
-    (void)byte;  // Unused parameter
+    (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
-    
+
     uint32_t value[2];
 
     int num_values = get_uint32_varvalues(value, 2, ",:.");
@@ -610,18 +605,22 @@ static scpi_in_state_t addr_handler(uint8_t byte, bool end) {
 
 /* `EOS [{TERMCHAR}]` */
 static scpi_in_state_t eos_handler(uint8_t byte, bool end) {
-    (void)byte;  // Unused parameter
+    (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
-    
+
     uint32_t value;
     if (get_uint32_varvalues(&value, 1) != 1) {
         value = 0;  // Default to 0 if no parameter is provided
     }
     if (value == 0) {
-        cfg.eos_enabled = false;
+        cfg.eos_enabled = false;  // do not use EOS for incoming messages, use EOI only
+        cfg.use_eoi = true;       // Use EOI for outgoing end of message
+        // As a side effect, the `endchars()` function will use CR/LF at end of all outgoing messages
     } else if (value >= 1 && value <= 255) {
         cfg.eos_enabled = true;
-        cfg.eos_byte = (uint8_t)value;
+        cfg.eos_byte = (uint8_t)value;  // use the provided byte as the EOS character for incoming messages (but EOI still is accepted)
+        cfg.use_eoi = false;            // Do not use EOI for outgoing end of message. 
+        // As a side effect, the `endchars()` function will use the EOS character at end of all outgoing messages
     } else {
         scpi_error_state = SCPI_PARAMETER;
     }
@@ -659,7 +658,7 @@ static scpi_in_state_t t1_handler(uint8_t byte, bool end) {
     if (value > 1000000) {  // Limit to 1 second
         value = 1000000;
     }
-    if (value < 2) { 
+    if (value < 2) {
         value = 2;  // Minimum value is 2 us, as per the IEEE 488.1-1987 standard
     }
     cfg.t1_delay_us = value;
@@ -707,10 +706,9 @@ static scpi_in_state_t t3q_handler(uint8_t byte, bool end) {
     return SCPI_FLUSH;
 }
 
-
 static scpi_command scpi_commands[] = {
     {"*IDN?", idn_handler},
-    {":SYST:ERR?", err_handler}, // yeah, this repitition is stupid. Here a better parser would be better. But it is the only case...
+    {":SYST:ERR?", err_handler},  // yeah, this repitition is stupid. Here a better parser would be better. But it is the only case...
     {":SYSTEM:ERR?", err_handler},
     {":SYST:ERROR?", err_handler},
     {":SYSTEM:ERROR?", err_handler},
@@ -745,13 +743,12 @@ bool add_to_in_buffer(uint8_t byte, bool end) {
         scpi_in_state = SCPI_FLUSH;
         if (end) {
             restart_in();  // Clear the input buffer after processing
-        }    
+        }
         return false;
     }
     in_buffer[in_counter++] = (char)byte;
     return true;
 }
-
 
 /** @brief Handle a received byte to be used in a command.
  * @param byte The received byte.
@@ -838,7 +835,7 @@ void read_command(uint8_t byte, bool end) {
     }
     if (end) {
         restart_in();  // Clear the input buffer after processing
-    }    
+    }
     return;
 }
 
@@ -851,7 +848,6 @@ void read_stream(uint8_t byte, bool end) {
         // Not in stream mode, ignore the byte
         return;
     }
-
 }
 
 /** The callbacks from the IEEE-488 interface */
@@ -876,7 +872,7 @@ bool device_tx(uint8_t* byte, bool* end) {
     }
     if (scpi_out_from_buffer) {
         if (out_counter >= strlen(out_buffer)) {
-            *end = true;        
+            *end = true;
             return false;
         }
         *byte = (uint8_t)out_buffer[out_counter++];
@@ -897,16 +893,16 @@ bool device_tx(uint8_t* byte, bool* end) {
         }
         if (*end) Serial.print(" END");
         Serial.println();
-    }    
+    }
     return true;
 }
 
 /** @brief Check if the device is ready to receive a byte.
  * @return true if the device is ready to receive a byte, false otherwise.
  */
-bool device_rx_ready(void){
+bool device_rx_ready(void) {
     // The device is ready to receive a byte if the RX delay has expired
-    return rx_delay_expired(); // you might want to add:  && (scpi_in_state != SCPI_FLUSH);
+    return rx_delay_expired();  // you might want to add:  && (scpi_in_state != SCPI_FLUSH);
 }
 
 /** @brief Handle a received byte.
@@ -986,7 +982,6 @@ void addressed_changed(bool addressed) {
         Serial.println();
     }
 }
-
 
 void handle_idle(void) {
     // This function can be used to handle idle state, such as processing commands or other tasks.

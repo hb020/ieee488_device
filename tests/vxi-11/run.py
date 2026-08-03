@@ -22,12 +22,21 @@ from vxi11_2_base import VXI11_2_Base
 from vxi11_2_testsrq import VXI11_2_testsrq
 from vxi11_2_longrd import VXI11_2_longrd
 from vxi11_2_longwr import VXI11_2_longwr
+from vxi11_2_end import VXI11_2_end
 import logging
 import argparse
 import sys
 
-DEFAULT_GATEWAY_IP = "192.168.7.116"
-DEFAULT_INST = 1
+if False:
+    DEFAULT_GATEWAY_IP = "192.168.7.116"
+    DEFAULT_INST = 1
+    DEFAULT_PROVIDER = ""
+    DEFAULT_TEST = 0
+else:
+    DEFAULT_GATEWAY_IP = "127.0.0.1"
+    DEFAULT_INST = 0
+    DEFAULT_PROVIDER = "py"
+    DEFAULT_TEST = 8
 
 # Configure logging, and set global log level (for pyvisa etc)
 LOG_LEVEL = logging.INFO # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -46,9 +55,9 @@ if __name__ == "__main__":
     # The names to use for the tests, indexed by test number. The first test is 0, which means all tests.
     test_names = "0 All\n"
     # The test classes to use
-    testers = [VXI11_2_Base, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr]
+    testers = [VXI11_2_Base, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr, VXI11_2_end]
     # the file names. Not much logging in their name, but anyway.
-    logger_names = ["vxi11_2_base", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr"]
+    logger_names = ["vxi11_2_base", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr", "vxi11_2_end"]
     # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
     test_steps = []
     global_test_nr = 1
@@ -65,8 +74,8 @@ if __name__ == "__main__":
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("gateway_ip", type=str, nargs="?", default=DEFAULT_GATEWAY_IP, help="The IP address of the gateway device to use for tests.")
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'")
-    parser.add_argument("-V", "--visa-provider", type=str, default="", choices=VXI11_2_Base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
-    parser.add_argument("-T", "--test", type=int, default=0, choices=range(0, len(test_steps)+1), help=test_names)
+    parser.add_argument("-V", "--visa-provider", type=str, default=DEFAULT_PROVIDER, choices=VXI11_2_Base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
+    parser.add_argument("-T", "--test", type=int, default=DEFAULT_TEST, choices=range(0, len(test_steps)+1), help=test_names)
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
     
     args = parser.parse_args()

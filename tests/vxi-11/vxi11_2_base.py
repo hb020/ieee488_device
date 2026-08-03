@@ -290,7 +290,7 @@ class VXI11_2_Base(object):
             # older generation HP8590 series spectrum analyzer
             return { "cmds_init": ["CLS", "CMDERRQ?"], "cmd_errq": "CMDERRQ?" }  # clear the error queue twice, as I have provoked an error with *IDN?
         else:
-            return { "cmds_init": ["*CLS"], "cmd_errq": "SYST:ERR?" }
+            return { "cmds_init": ["*CLS"], "cmd_errq": ":SYST:ERR?" }
         
     def initialize_instrument(self, inst_nr: int, context: dict) -> bool:
         """Initialize the instrument with the given context.
