@@ -263,7 +263,10 @@ class VXI11_2_Base(object):
 
         if "cmds_init" not in context or len(context["cmds_init"]) == 0:
             self.logger.warning(f"No initialization commands for {resource_name} with IDN \"{idn}\", cannot run the tests for this instrument.")
-            inst.close()
+            try:
+                inst.close()
+            except Exception:
+                pass
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             return False
