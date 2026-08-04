@@ -27,16 +27,14 @@ import logging
 import argparse
 import sys
 
-if False:
-    DEFAULT_GATEWAY_IP = "192.168.7.116"
-    DEFAULT_INST = 1
-    DEFAULT_PROVIDER = ""
-    DEFAULT_TEST = 0
-else:
-    DEFAULT_GATEWAY_IP = "127.0.0.1"
-    DEFAULT_INST = 0
-    DEFAULT_PROVIDER = "py"
-    DEFAULT_TEST = 8
+DEFAULT_GATEWAY_IP = "192.168.7.116"
+DEFAULT_INST = 1
+DEFAULT_PROVIDER = ""
+DEFAULT_TEST = 0
+# DEFAULT_GATEWAY_IP = "127.0.0.1"
+# DEFAULT_INST = 0
+# DEFAULT_PROVIDER = "py"
+# DEFAULT_TEST = 8
 
 # Configure logging, and set global log level (for pyvisa etc)
 LOG_LEVEL = logging.INFO # DEBUG, INFO, WARNING, ERROR, CRITICAL
