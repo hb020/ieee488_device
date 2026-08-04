@@ -872,11 +872,19 @@ bool device_tx(uint8_t* byte, bool* end) {
     }
     if (scpi_out_from_buffer) {
         if (out_counter >= strlen(out_buffer)) {
-            *end = true;
+            if (cfg.use_eoi) {
+                *end = true;
+            } else {
+                *end = false;
+            }
             return false;
         }
         *byte = (uint8_t)out_buffer[out_counter++];
-        *end = out_counter >= strlen(out_buffer);
+        if (cfg.use_eoi) {
+            *end = out_counter >= strlen(out_buffer);
+        } else {
+            *end = false;
+        }
     }
     tx_arm_delay(false);  // arm the tx delay timer for the next byte, if configured
 

@@ -71,20 +71,54 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         inst.write(cmd_goto_eos)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
-        inst.write(cmd_test)
-        r = inst.read()
-        if r.strip() != cmd_expected_reply:
-            self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{cmd_expected_reply}\", got \"{r}\"")
+        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
+        try:
+            inst.write(cmd_test)
+            r = inst.read_raw().decode("ascii")
+            expected = cmd_expected_reply + "\n"
+            if r != expected:
+                self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
+                return False
+        except Exception as e:
+            self.logger.error(f"instrument nr {inst_nr}: EOS test raised an exception: {e}")
             return False
         
         # normal case (EOI)
-        inst.write(cmd_goto_eoi)
-        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-        inst.write(cmd_test)
-        r = inst.read()
-        if r.strip() != cmd_expected_reply:
-            self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{cmd_expected_reply}\", got \"{r}\"")
+        try:
+            inst.write(cmd_goto_eoi)
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
+            inst.write(cmd_test)
+            r = inst.read_raw().decode("ascii")
+            expected = cmd_expected_reply
+            r = r.rstrip() # remove the trailing newline, as the EOI case does not have a newline
+            if r != expected:
+                self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected}\", got \"{r}\"")
+                return False
+        except Exception as e:
+            self.logger.error(f"instrument nr {inst_nr}: EOI test raised an exception: {e}")
             return False
+        
+        try:
+            inst.write(cmd_test)
+            r = inst.read_bytes(len(r)-5).decode("ascii") # read one less character than the previous read, to test that the read stops at EOI
+            expected = cmd_expected_reply[:-5] # remove the last 5 characters from the expected reply, to match the read length
+            if r != expected:
+                self.logger.error(f"instrument nr {inst_nr}: length test failed: expected \"{expected}\", got \"{r}\"")
+                return False
+        except Exception as e:
+            self.logger.error(f"instrument nr {inst_nr}: length test raised an exception: {e}")
+            return False
+        
+        old_timeout = inst.timeout
+        try:
+            inst.timeout = 100 # set a short timeout to test that the read stops at EOI
+            inst.read_raw()
+        except Exception as e:
+            self.logger.error(f"instrument nr {inst_nr}: flush raised an exception: {e}")
+            return False
+        finally:
+            inst.timeout = old_timeout
         
         # The following are read/write attributes
         # VI_ATTR_TERMCHAR_EN
@@ -121,8 +155,8 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         if "ieee488_device" in idn:
             cmd_goto_eos = "EOS 10"
             cmd_goto_eoi = "EOS"
-            cmd_test = "*IDN?"
-            cmd_expected_reply = "IDN-SGLT-PRI SDG0000X"
+            cmd_test = "LONGRD? 10"
+            cmd_expected_reply = "0123456789"
         if "IDN-SGLT-PRI" in idn: # dummy device tests
             cmd_goto_eos = "EOS 10"
             cmd_goto_eoi = "EOS"
