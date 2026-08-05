@@ -68,11 +68,11 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         inst.read_terminator = "\n"
         
         # EOS case
-        inst.write(cmd_goto_eos)
-        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
-        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
-        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
         try:
+            inst.write(cmd_goto_eos)
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
             inst.write(cmd_test)
             r = inst.read_raw().decode("ascii")
             expected = cmd_expected_reply + "\n"

@@ -180,7 +180,11 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                 inst.write(cmd)
             sleep(0.1)
             
-        stb = inst.read_stb()
+        try:
+            stb = inst.read_stb()
+        except Exception as e:
+            self.logger.error(f"Failed to read STB from {resource_name}: {e}")
+            return False
         if stb != 0:
             self.logger.error(f"Programming error: STB not 0 after init for {resource_name}, STB=0x{stb:02X}")
             return False
