@@ -80,6 +80,9 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
                     return False
+                inst.write(cmd_goto_eoi)
+                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
+                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)                
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: EOS test raised an exception: {e}")
                 return False
@@ -96,11 +99,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                 r = r.rstrip() # remove the trailing newline, as the EOI case does not have a newline
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected}\", got \"{r}\"")
-                    return False
-                # go back to EOI
-                inst.write(cmd_goto_eoi)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)                
+                    return False          
                 
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: EOI test raised an exception: {e}")
@@ -110,8 +109,12 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
             try:
                 inst.write(cmd_goto_eoi)
                 inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)                
+                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
+                # do it once to get the normal length
                 inst.write(cmd_test)
+                r = inst.read_raw().decode("ascii").rstrip() # remove the trailing newline, as the EOI case does not have a newline
+                # now ask the same, just with a smaller length
+                inst.write(cmd_test)                                
                 r = inst.read_bytes(len(r)-5).decode("ascii") # read one less character than the previous read, to test that the read stops at EOI
                 expected = cmd_expected_reply[:-5] # remove the last 5 characters from the expected reply, to match the read length
                 if r != expected:

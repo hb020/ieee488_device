@@ -37,6 +37,9 @@ class VXI11_2_Base(object):
     """
     Base class for VXI-11 tests.
     """
+    
+    skipped: int = 0  # number of tests skipped in this test class
+    
     @property
     def logger(self):
         return logging.getLogger(f"{self.__class__.__name__}")
@@ -57,6 +60,7 @@ class VXI11_2_Base(object):
         :raises Exception: If the specified provider is not available on the current platform.
         :raises ValueError: If the instrument addresses are invalid.
         """
+        self.skipped = 0
         self.gateway_ip = gateway_ip
         self.inst_addresses = self.validate_instrument_addresses(inst_addresses)
         if self.inst_addresses is None:
@@ -221,25 +225,32 @@ class VXI11_2_Base(object):
             return f"TCPIP::{self.gateway_ip}::inst{addr}::INSTR"
         else:
             return f"TCPIP::{self.gateway_ip}::gpib0,{addr}::INSTR"
-        
-    def open_instrument(self, inst_nr: int) -> bool:
+     
+    def open_instrument(self, inst_nr: int) -> int:
+        """Open the instrument with the given instrument number.
+
+        :param inst_nr: The instrument number
+        :type inst_nr: int
+        :return: 0 = OK, 1 = Failed to open instrument, -1 = instrument is to be skipped
+        :rtype: int
+        """
         if not hasattr(self, 'rm') or self.rm is None:
             self.logger.error("Resource manager is not initialized")
-            return False
+            return 1
         
         resource_name = self._inst_contexts[inst_nr]["resource_name"]
         try:
             inst = self.rm.open_resource(resource_name)
         except Exception as e:
             self.logger.error(f"Failed to open {resource_name}: {e}")
-            return False
+            return 1
         inst.timeout = 1000
         if inst is None or not (
                 isinstance(inst, pyvisa.resources.TCPIPInstrument) or 
                 isinstance(inst, pyvisa.resources.GPIBInstrument) or
                 isinstance(inst, pyvisa.resources.USBInstrument)):
             self.logger.error(f"Failed to open {resource_name}")
-            return False
+            return 1
         
         self._inst_contexts[inst_nr]["opened"] = True
         self._inst_contexts[inst_nr]["inst"] = inst
@@ -256,7 +267,7 @@ class VXI11_2_Base(object):
                 pass
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
-            return False
+            return 1
         # self.logger.debug(f"IDN: {idn}")
         
         context = self.make_instrument_context(inst_nr, idn)
@@ -269,11 +280,11 @@ class VXI11_2_Base(object):
                 pass
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
-            return False
+            return -1 # skip this instrument
 
         for k,v in context.items():
             self._inst_contexts[inst_nr][k] = v
-        return True
+        return 0
     
     def make_instrument_context(self, inst_nr: int, idn: str) -> dict:
         """Create and initialize the instrument context for the given instrument number.
@@ -356,9 +367,14 @@ class VXI11_2_Base(object):
         for inst_nr, context in self._inst_contexts.items():
             resource_name = context["resource_name"]
             self.logger.info(f"Connecting to instrument {inst_nr} at {resource_name}")
-            if not self.open_instrument(inst_nr):
+            r = self.open_instrument(inst_nr)
+            if r > 0:
                 self.logger.error(f"Failed to setup instrument {inst_nr} at {resource_name}")
                 all_passed = False
+                continue
+            elif r < 0:
+                self.logger.warning(f"Skipping instrument {inst_nr} at {resource_name}")
+                self.skipped += 1
                 continue
             
             if not self.initialize_instrument(inst_nr, context):

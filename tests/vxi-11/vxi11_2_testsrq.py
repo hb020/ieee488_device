@@ -295,10 +295,15 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            if not self.open_instrument(inst_nr):
+            r = self.open_instrument(inst_nr)
+            if r > 0:
                 self.logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
-                continue;
+                continue
+            elif r < 0:
+                self.logger.warning(f"{testname}: Skipping {resource_name}")
+                self.skipped += 1
+                continue
 
             if this_instrument_ok:
                 if not self._prepare_to_listen_for_srq(inst_nr, context):
@@ -339,6 +344,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         
         if (len(self._inst_contexts) < 2):
             self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple listeners")
+            self.skipped += 1
             return True
         
         retvalue = True
@@ -354,10 +360,15 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            if not self.open_instrument(inst_nr):
+            r = self.open_instrument(inst_nr)
+            if r > 0:
                 self.logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
-                continue;
+                continue
+            elif r < 0:
+                self.logger.warning(f"{testname}: Skipping {resource_name}")
+                self.skipped += 1
+                continue
 
             if this_instrument_ok:
                 if not self._prepare_to_listen_for_srq(inst_nr, context):
@@ -409,6 +420,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         
         if (len(self._inst_contexts) < 2):
             self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple emitters")
+            self.skipped += 1
             return True
                 
         retvalue = True
@@ -423,10 +435,15 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             this_instrument_ok = True
             resource_name = context["resource_name"]
             
-            if not self.open_instrument(inst_nr):
+            r = self.open_instrument(inst_nr)
+            if r > 0:
                 self.logger.error(f"{testname}: Failed to open {resource_name}")
                 retvalue = False
-                continue;
+                continue
+            elif r < 0:
+                self.logger.warning(f"{testname}: Skipping {resource_name}")
+                self.skipped += 1
+                continue
 
             if this_instrument_ok:
                 if not self._prepare_to_listen_for_srq(inst_nr, context):

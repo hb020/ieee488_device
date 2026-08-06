@@ -104,6 +104,7 @@ if __name__ == "__main__":
     
     # determine tests to run
     ok = True
+    skipped = 0
     for i, (tester, step, global_test_nr, local_test_nr) in enumerate(test_steps):
         if global_test_nr == test_to_run or test_to_run == 0:
             try:
@@ -112,9 +113,11 @@ if __name__ == "__main__":
                 logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
                 sys.exit(1) 
             
+            t.skipped = 0
             if not t.run(local_test_nr):
                 ok = False
+            skipped += t.skipped
             t.close()
 
-    logger.info("All tests completed: " + ("OK" if ok else "FAILED"))
+    logger.info(f"All tests completed: {'OK' if ok else 'FAILED'}, {skipped} tests skipped.")
     
