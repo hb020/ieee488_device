@@ -251,9 +251,7 @@ class VXI11_2_Base(object):
                 isinstance(inst, pyvisa.resources.USBInstrument)):
             self.logger.error(f"Failed to open {resource_name}")
             return 1
-        
-        self._inst_contexts[inst_nr]["opened"] = True
-        self._inst_contexts[inst_nr]["inst"] = inst
+
         try:
             idn = inst.query("*IDN?").strip()
             if idn == "":
@@ -265,10 +263,13 @@ class VXI11_2_Base(object):
                 inst.close()
             except Exception:
                 pass
+            # TODO, this seems to be noisy, suppress that.
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             return 1
         # self.logger.debug(f"IDN: {idn}")
+        self._inst_contexts[inst_nr]["opened"] = True
+        self._inst_contexts[inst_nr]["inst"] = inst        
         
         context = self.make_instrument_context(inst_nr, idn)
 
