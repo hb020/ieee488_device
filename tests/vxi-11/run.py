@@ -51,11 +51,12 @@ if __name__ == "__main__":
     # Parse command line arguments
     
     # The names to use for the tests, indexed by test number. The first test is 0, which means all tests.
-    test_names = "0 All\n"
+    # Use 2 digits for the number, so that the list is nicely aligned. The first test is 0, which means all tests.
+    test_names = " 0 All\n"
     # The test classes to use
-    testers = [VXI11_2_Base, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr, VXI11_2_end]
+    testers = [VXI11_2_Base, VXI11_2_end, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr]
     # the file names. Not much logging in their name, but anyway.
-    logger_names = ["vxi11_2_base", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr", "vxi11_2_end"]
+    logger_names = ["vxi11_2_base", "vxi11_2_end", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr"]
     # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
     test_steps = []
     global_test_nr = 1
@@ -65,7 +66,7 @@ if __name__ == "__main__":
         for step in tester_steps:
             test_steps.append((tester, step, global_test_nr, local_test_nr))
             local_test_nr += 1
-            test_names = test_names + f"{global_test_nr} {step}\n"
+            test_names = test_names + f"{global_test_nr:2} {step}\n"
             global_test_nr += 1
 
     parser = argparse.ArgumentParser(description="Test SRQ handling for VXI-11.",
