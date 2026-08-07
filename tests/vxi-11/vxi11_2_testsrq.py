@@ -55,22 +55,26 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         return ["SRQ: individual early enable", "SRQ: individual late enable", "SRQ: single emitter", "SRQ: multiple emitters"]
 
     def run(self, test: int) -> bool:
+        # reset the counters for this test run. They are maintained inside the _test_.... methods
+        self.succeeded = 0
+        self.failed = 0
+        self.skipped = 0
         ok = True
         testname = f"Test \"{self.testmethods()[test]}\""
         # self.logger.info(f"{testname}: Start")  # no need to log, the individual tests will log their own start and end
         if (test == 0):
-            if not self._test_individual_srqs(early_enable=True, testname=testname):
+            if not self._test_individual_srqs(early_enable=True, testname=testname, test=test):
                 ok = False
         if (test == 1):
-            if not self._test_individual_srqs(early_enable=False, testname=testname):
+            if not self._test_individual_srqs(early_enable=False, testname=testname, test=test):
                 ok = False
         if (test == 2):
-            if not self._test_one_emitting_srq(testname=testname):
+            if not self._test_one_emitting_srq(testname=testname, test=test):
                 ok = False
         if (test == 3):
-            if not self._test_multiple_emitting_srq(testname=testname):
+            if not self._test_multiple_emitting_srq(testname=testname, test=test):
                 ok = False
-        # self.logger.info(f"{testname}: {'OK' if ok else 'FAILED'}")    # no need to log, the individual tests will log their own start and end
+        # no need to log, the individual tests will log their own start and end
         return ok
     
     def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
@@ -84,52 +88,51 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         for inst_nr, _ in self._inst_contexts.items():
             srq_called[inst_nr] = 0
 
-    def make_instrument_context(self, inst_nr: int, idn: str) -> dict:
-        """Create and initialize the instrument context for the given instrument number.
-
-        It must return at least a dict with the following keys:
-        - "cmds_init": a list of commands to initialize the instrument for testing. This is not allowed to be empty.
-
-        :param inst_nr: The instrument number
-        :type inst_nr: int
-        :param idn: The identification string of the instrument
-        :type idn: str
-        :return: a dict with all test specific information for the instrument
-        :rtype: dict
-        """
-        cmds_init = []
+    def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
+        cmds_init = []         # mandatory
         cmds_srq_enable = []
-        cmds_srq_provoke = ""
+        cmds_srq_provoke = ""  # mandatory, must be set for instruments that support SRQ, otherwise the test will be skipped for that instrument
+        cmds_srq_disable = []
         if "STMEthernet2GPIB" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
             cmds_srq_enable = ["*ESE 254", "*SRE 4"]
             cmds_srq_provoke = "bla"
+            cmds_srq_disable = ["*SRE 0"]
         if "66332A" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
             cmds_srq_enable = ["*ESE 254", "*SRE 32"]
             cmds_srq_provoke = "bla"
+            cmds_srq_disable = ["*SRE 0"]
         if "6634B" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
             cmds_srq_enable = ["*ESE 254", "*SRE 32"]
             cmds_srq_provoke = "bla"
+            cmds_srq_disable = ["*SRE 0"]
         if "34465A" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*RST"]
             cmds_srq_enable = ["*SRE 36"]
             cmds_srq_provoke = "bla"
+            cmds_srq_disable = ["*SRE 0"]
         if "DMM6500" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*RST", "SYST:CLE", "STAT:CLE"]
             cmds_srq_enable = ["*SRE 36"]
             cmds_srq_provoke = "bla"
+            cmds_srq_disable = ["*SRE 0"]
         if "HP859" in idn:
-            cmds_init = ["CLS", "CMDERRQ?"]
+            cmds_init = ["CLS", "CMDERRQ?", "RQS 0"]
             cmds_srq_enable = ["RQS 40"]
             cmds_srq_provoke = "SRQ 8"
+            cmds_srq_disable = ["RQS 0"]
         if "ieee488_device" in idn:
             cmds_init = ["*CLS"]
             cmds_srq_enable = []
             cmds_srq_provoke = "SRQ"
+            cmds_srq_disable = []
+        if len(cmds_init) == 0 or len(cmds_srq_provoke) == 0:
+            # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for SRQ tests")
+            return {}
 
-        return {"cmds_init": cmds_init, "cmds_srq_enable": cmds_srq_enable, "cmds_srq_provoke": cmds_srq_provoke}
+        return {"cmds_init": cmds_init, "cmds_srq_enable": cmds_srq_enable, "cmds_srq_provoke": cmds_srq_provoke, "cmds_srq_disable": cmds_srq_disable}
     
     def close_instrument(self, inst_nr) -> bool:
         context = self._inst_contexts[inst_nr]
@@ -137,6 +140,15 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         inst = context["inst"]
         if not context["opened"]:
             return super().close_instrument(inst_nr)
+        
+        for cmd in context["cmds_srq_disable"]:
+            # self.logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
+            if cmd.endswith("?"):
+                resp = inst.query(cmd)
+                # self.logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
+            else:
+                inst.write(cmd)
+            sleep(0.1)
         
         event_type = pyvisa.constants.EventType.service_request
         if self.srq_enabled.get(inst_nr, False):
@@ -283,7 +295,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
     ###############################################################################################
     
     # Test SRQ handling for a range of instruments on the bus, one after the other
-    def _test_individual_srqs(self, early_enable: bool, testname: str) -> bool:
+    def _test_individual_srqs(self, early_enable: bool, testname: str, test: int) -> bool:
         retvalue = True
                 
         global_testname = f"{testname} for {len(self._inst_contexts)} instrument{'s' if len(self._inst_contexts) != 1 else ''}"
@@ -295,10 +307,10 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            r = self.open_instrument(inst_nr)
+            r = self.open_instrument(inst_nr, testname, test)
             if r > 0:
                 self.logger.error(f"{testname}: Failed to open {resource_name}")
-                retvalue = False
+                self.failed += 1
                 continue
             elif r < 0:
                 self.logger.warning(f"{testname}: Skipping {resource_name}")
@@ -332,19 +344,26 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             self.close_instrument(inst_nr)
             if this_instrument_ok:
                 self.logger.info(f"{testname}: {resource_name} is OK")
+                self.succeeded += 1
             else:
-                retvalue = False
-        self.logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
-        return retvalue
+                self.failed += 1
+
+        if (self.failed == 0):
+            self.logger.info(f"{global_testname}: OK")
+        else:
+            self.logger.error(f"{global_testname}: FAILED")
+        
+        return self.failed == 0
 
     # Test SRQ handling for a single emitting instrument on the bus, while other instruments are present on the bus, 
     # listening for events, but not emitting SRQ
-    def _test_one_emitting_srq(self, testname: str) -> bool:
+    def _test_one_emitting_srq(self, testname: str, test: int) -> bool:
         test_instrument = 1  # first one, the list is 1 based, not 0 based
+        # This counts as 1 test, so the skipped/failed/succeeded counters are set to 1, not incremented for each instrument
         
         if (len(self._inst_contexts) < 2):
             self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple listeners")
-            self.skipped += 1
+            self.skipped = 1
             return True
         
         retvalue = True
@@ -360,14 +379,14 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            r = self.open_instrument(inst_nr)
+            r = self.open_instrument(inst_nr, testname, test)
             if r > 0:
                 self.logger.error(f"{testname}: Failed to open {resource_name}")
-                retvalue = False
+                self.failed = 1
                 continue
             elif r < 0:
                 self.logger.warning(f"{testname}: Skipping {resource_name}")
-                self.skipped += 1
+                self.skipped = 1
                 continue
 
             if this_instrument_ok:
@@ -379,17 +398,21 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                     self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
                     this_instrument_ok = False
             if not this_instrument_ok:
-                retvalue = False
+                self.failed = 1
         
+        # any skipped: the test cannot continue
+        if self.skipped:
+            self.logger.warning(f"{testname}: Skipping the entire test because one or more instruments were skipped")
+                
         # only 1 emitting instrument, the others are just listening
-        if retvalue:
+        if self.failed == 0 and self.skipped == 0:
             resource_name = testcontext["resource_name"]
             if not self._emit_srq(test_instrument, testcontext):
                 self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
-                retvalue = False
+                self.failed = 1
                 
         # Check results: only the emitting instrument should have had SRQ, the others should not have had SRQ
-        if retvalue:
+        if self.failed == 0 and self.skipped == 0:
             # wait for SRQ for all instruments, so that the listening instrument can receive it
             for inst_nr, context in self._inst_contexts.items():
                 self._wait_srq_for_instr(inst_nr, context)
@@ -401,7 +424,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                 if inst_nr == test_instrument:
                     ok, _, nr_intr = self._check_if_had_srq(inst_nr, True, 1, testname, context)
                     if not ok:
-                        retvalue = False
+                        self.failed = 1
                 else:
                     ok, _, nr_intr = self._check_if_had_srq(inst_nr, False, -1, testname, context)
                     if nr_intr > 0:
@@ -410,17 +433,24 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         for inst_nr, context in self._inst_contexts.items():
             self.close_instrument(inst_nr)
             
-        self.logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
-        return retvalue
+        if self.failed == 0 and self.skipped == 0:
+            self.succeeded = 1
+
+        if (self.failed == 0):
+            self.logger.info(f"{global_testname}: OK")
+        else:
+            self.logger.error(f"{global_testname}: FAILED")
+        return self.failed == 0
 
 
     # Test SRQ handling for multiple instruments emitting SRQ on the bus, but only one listening for events
-    def _test_multiple_emitting_srq(self, testname: str) -> bool:
+    def _test_multiple_emitting_srq(self, testname: str, test: int) -> bool:
         test_instrument = 1  # first one, the list is 1 based, not 0 based
-        
+        # This counts as 1 test, so the skipped/failed/succeeded counters are set to 1, not incremented for each instrument
+                
         if (len(self._inst_contexts) < 2):
             self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple emitters")
-            self.skipped += 1
+            self.skipped = 1
             return True
                 
         retvalue = True
@@ -435,14 +465,14 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             this_instrument_ok = True
             resource_name = context["resource_name"]
             
-            r = self.open_instrument(inst_nr)
+            r = self.open_instrument(inst_nr, testname, test)
             if r > 0:
                 self.logger.error(f"{testname}: Failed to open {resource_name}")
-                retvalue = False
+                self.failed = 1
                 continue
             elif r < 0:
                 self.logger.warning(f"{testname}: Skipping {resource_name}")
-                self.skipped += 1
+                self.skipped = 1
                 continue
 
             if this_instrument_ok:
@@ -455,18 +485,22 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                         self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
                         this_instrument_ok = False
             if not this_instrument_ok:
-                retvalue = False
+                self.failed = 1
+                
+        # any skipped: the test cannot continue
+        if self.skipped:
+            self.logger.warning(f"{testname}: Skipping the entire test because one or more instruments were skipped")
                 
         # All emit
-        if retvalue:
+        if self.failed == 0 and self.skipped == 0:
             for inst_nr, context in self._inst_contexts.items():            
                 resource_name = context["resource_name"]
                 if not self._emit_srq(inst_nr, context):
                     self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
-                    retvalue = False
+                    self.failed = 1
         
         # All should have SRQ bit set, but only the listening instrument should have had SRQ call
-        if retvalue:
+        if self.failed == 0 and self.skipped == 0:
             # wait for SRQ for all instruments, so that the listening instrument can receive it
             for inst_nr, context in self._inst_contexts.items():
                 self._wait_srq_for_instr(inst_nr, context)
@@ -480,10 +514,17 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                     expected_calls = 0
                 ok, _, _ = self._check_if_had_srq(inst_nr, True, expected_calls, testname, context)
                 if not ok:
-                    retvalue = False
+                    self.failed = 1
 
         for inst_nr, context in self._inst_contexts.items():
             self.close_instrument(inst_nr)
-        self.logger.info(f"{global_testname}: {'OK' if retvalue else 'FAILED'}")
-        return retvalue
+            
+        if self.failed == 0 and self.skipped == 0:
+            self.succeeded = 1
+        
+        if (self.failed == 0):
+            self.logger.info(f"{global_testname}: OK")
+        else:
+            self.logger.error(f"{global_testname}: FAILED")
+        return self.failed == 0
 #endregion

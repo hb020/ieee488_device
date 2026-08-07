@@ -61,6 +61,8 @@ class VXI11_2_Base(object):
         :raises ValueError: If the instrument addresses are invalid.
         """
         self.skipped = 0
+        self.succeeded = 0
+        self.failed = 0
         self.gateway_ip = gateway_ip
         self.inst_addresses = self.validate_instrument_addresses(inst_addresses)
         if self.inst_addresses is None:
@@ -226,11 +228,15 @@ class VXI11_2_Base(object):
         else:
             return f"TCPIP::{self.gateway_ip}::gpib0,{addr}::INSTR"
      
-    def open_instrument(self, inst_nr: int) -> int:
+    def open_instrument(self, inst_nr: int, testname: str, test: int) -> int:
         """Open the instrument with the given instrument number.
 
         :param inst_nr: The instrument number
         :type inst_nr: int
+        :param testname: The name of the test being run.
+        :type testname: str
+        :param test: The test to run. The number is from the index from `testmethods()`.
+        :type test: int
         :return: 0 = OK, 1 = Failed to open instrument, -1 = instrument is to be skipped
         :rtype: int
         """
@@ -242,14 +248,14 @@ class VXI11_2_Base(object):
         try:
             inst = self.rm.open_resource(resource_name)
         except Exception as e:
-            self.logger.error(f"Failed to open {resource_name}: {e}")
+            self.logger.error(f"{testname}: Failed to open {resource_name}: {e}")
             return 1
         inst.timeout = 1000
         if inst is None or not (
                 isinstance(inst, pyvisa.resources.TCPIPInstrument) or 
                 isinstance(inst, pyvisa.resources.GPIBInstrument) or
                 isinstance(inst, pyvisa.resources.USBInstrument)):
-            self.logger.error(f"Failed to open {resource_name}")
+            self.logger.error(f"{testname}: Failed to open {resource_name}")
             return 1
 
         try:
@@ -257,13 +263,12 @@ class VXI11_2_Base(object):
             if idn == "":
                 idn = inst.query("*ID?").strip()  # this will have provoked an error to appear in the error queue
         except pyvisa.VisaIOError as e:
-            self.logger.error(f"Failed to query IDN for {resource_name}: {e}")
+            self.logger.error(f"{testname}: Failed to query IDN for {resource_name}: {e}")
             try:
                 # This might crash as well...
                 inst.close()
             except Exception:
                 pass
-            # TODO, this seems to be noisy, suppress that.
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             return 1
@@ -271,10 +276,10 @@ class VXI11_2_Base(object):
         self._inst_contexts[inst_nr]["opened"] = True
         self._inst_contexts[inst_nr]["inst"] = inst        
         
-        context = self.make_instrument_context(inst_nr, idn)
+        context = self.get_instrument_commands(inst_nr, idn, test)
 
-        if "cmds_init" not in context or len(context["cmds_init"]) == 0:
-            self.logger.warning(f"No initialization commands for {resource_name} with IDN \"{idn}\", cannot run the tests for this instrument.")
+        if len(context) == 0 or "cmds_init" not in context or len(context["cmds_init"]) == 0:
+            self.logger.warning(f"{testname}: No suitable commands for {resource_name} with IDN \"{idn}\".")
             try:
                 inst.close()
             except Exception:
@@ -287,18 +292,20 @@ class VXI11_2_Base(object):
             self._inst_contexts[inst_nr][k] = v
         return 0
     
-    def make_instrument_context(self, inst_nr: int, idn: str) -> dict:
-        """Create and initialize the instrument context for the given instrument number.
+    def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
+        """Get the instrument commands for the instrument and the test
         
         It must return at least a dict with the following keys:
-        - "cmds_init": a list of commands to initialize the instrument for testing. This is not allowed to be empty.
+        - "cmds_init": a list of commands to initialize the instrument for testing. If absent or empty, the test will be skipped for that instrument.
         - "cmd_errq": the command to query the error queue of the instrument, after the init. If empty, no error checking will be performed.
 
         :param inst_nr: The instrument number
         :type inst_nr: int
         :param idn: The identification string of the instrument
         :type idn: str
-        :return: a dict with all test specific information for the instrument
+        :param test: The test to run. The number is from the index from `testmethods()`.
+        :type test: int
+        :return: a dict with all test specific information for the instrument. Will be empty if the instrument doe snot support the test, test will be skipped.
         :rtype: dict
         """
         if "HP859" in idn:
@@ -356,6 +363,11 @@ class VXI11_2_Base(object):
     
     def run(self, test: int) -> bool:
         """Run the tests for all instruments in the specified range.
+        
+        Must maintain the following counters:
+        - self.skipped: number of tests skipped in this test class
+        - self.succeeded: number of tests done in this test class
+        - self.failed: number of tests failed in this test class
 
         :param test: The test to run. The number is from the index from `testmethods()`. 
         :type test: int
@@ -365,29 +377,44 @@ class VXI11_2_Base(object):
         testname = f"Test \"{self.testmethods()[test]}\""
         self.logger.info(f"{testname}: Start")
         all_passed = True
+        # reset counters for this run
+        self.skipped = 0
+        self.succeeded = 0
+        self.failed = 0
+        # run the test for all instruments
         for inst_nr, context in self._inst_contexts.items():
             resource_name = context["resource_name"]
-            self.logger.info(f"Connecting to instrument {inst_nr} at {resource_name}")
-            r = self.open_instrument(inst_nr)
+            self.logger.info(f"{testname}: Connecting to instrument {inst_nr} at {resource_name}")
+            r = self.open_instrument(inst_nr, testname, test)
             if r > 0:
-                self.logger.error(f"Failed to setup instrument {inst_nr} at {resource_name}")
+                self.logger.error(f"{testname}: Failed to setup instrument {inst_nr} at {resource_name}")
+                self.failed += 1
                 all_passed = False
                 continue
             elif r < 0:
-                self.logger.warning(f"Skipping instrument {inst_nr} at {resource_name}")
+                self.logger.warning(f"{testname}: Skipping instrument {inst_nr} at {resource_name}")
                 self.skipped += 1
                 continue
             
             if not self.initialize_instrument(inst_nr, context):
-                self.logger.error(f"Failed to initialize instrument {inst_nr} at {resource_name}")
+                self.logger.error(f"{testname}: Failed to initialize instrument {inst_nr} at {resource_name}")
                 all_passed = False
                 self.close_instrument(inst_nr)
+                self.failed += 1
                 continue
             
             if not self.test_instrument(inst_nr, context, test, testname):
                 all_passed = False
+                self.failed += 1
+            else:
+                self.succeeded += 1
+            self.close_instrument(inst_nr)
         
-        self.logger.info(f"{testname}: {'OK' if all_passed else 'FAILED'}")
+        if (self.failed == 0):
+            self.logger.info(f"{testname}: OK")
+        else:
+            self.logger.error(f"{testname}: FAILED")
+
         return all_passed
     
     
@@ -397,11 +424,11 @@ class VXI11_2_Base(object):
         This method should be overridden in a subclass to implement specific tests.
         
         The context parameter contains all test specific information for the instrument, 
-        as created by the make_instrument_context method and populated in the setup_instrument method. 
+        as created by the get_instrument_commands method and populated in the setup_instrument method. 
         
         :param inst_nr: The instrument number
         :type inst_nr: int
-        :param context: The instrument context for the given instrument. This context is created by the make_instrument_context method and contains all test specific information for the instrument.
+        :param context: The instrument context for the given instrument. This context is created by the get_instrument_commands method and contains all test specific information for the instrument.
         :type context: dict
         :param test: The test to run. The number is from the index from `testmethods()`.
         :type test: int

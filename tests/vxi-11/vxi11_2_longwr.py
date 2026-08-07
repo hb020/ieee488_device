@@ -39,20 +39,8 @@ class VXI11_2_longwr(vxi11_2_base.VXI11_2_Base):
             return False
         return self.check_errors(inst_nr, context)
 
-    def make_instrument_context(self, inst_nr: int, idn: str) -> dict:
-        """Create and initialize the instrument context for the given instrument number.
-
-        It must return at least a dict with the following keys:
-        - "cmds_init": a list of commands to initialize the instrument for testing. This is not allowed to be empty.
-
-        :param inst_nr: The instrument number
-        :type inst_nr: int
-        :param idn: The identification string of the instrument
-        :type idn: str
-        :return: a dict with all test specific information for the instrument
-        :rtype: dict
-        """
-        ret = super().make_instrument_context(inst_nr, idn)
+    def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
+        ret = super().get_instrument_commands(inst_nr, idn, test)
         cmds_init = ret["cmds_init"][:]  # make a copy of the list, so that I only overwrite the commands I want to change, and keep the rest of the commands from the base class
         cmd_write = ""
         check_function = None
@@ -64,7 +52,7 @@ class VXI11_2_longwr(vxi11_2_base.VXI11_2_Base):
             check_len = datalen
 
         if check_function is None:
-            self.logger.error(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for long write test")
+            # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for long write test")
             return {}
         
         ret.update({"cmds_init": cmds_init, "cmd_write": cmd_write, "check_function": check_function, "check_len": check_len})

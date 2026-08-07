@@ -70,7 +70,8 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         if test == 0:
             # EOS case
             try:
-                inst.write(cmd_goto_eos)
+                if len(cmd_goto_eos) > 0:
+                    inst.write(cmd_goto_eos)
                 inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
                 inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
                 inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
@@ -143,23 +144,11 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         
         return self.check_errors(inst_nr, context)
 
-    def make_instrument_context(self, inst_nr: int, idn: str) -> dict:
-        """Create and initialize the instrument context for the given instrument number.
-
-        It must return at least a dict with the following keys:
-        - "cmds_init": a list of commands to initialize the instrument for testing. This is not allowed to be empty.
-
-        :param inst_nr: The instrument number
-        :type inst_nr: int
-        :param idn: The identification string of the instrument
-        :type idn: str
-        :return: a dict with all test specific information for the instrument
-        :rtype: dict
-        """
-        ret = super().make_instrument_context(inst_nr, idn)
+    def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
+        ret = super().get_instrument_commands(inst_nr, idn, test)
         cmds_init = ret["cmds_init"][:]  # make a copy of the list, so that I only overwrite the commands I want to change, and keep the rest of the commands from the base class
-        cmd_goto_eos = ""
-        cmd_goto_eoi = ""
+        cmd_goto_eos = ""  # leave empty for instruments that do not support EOS, so that the test will be skipped for those instruments
+        cmd_goto_eoi = ""  # may be empty. EOI tests will always be done.
         cmd_test = ""
         cmd_expected_reply = ""
         if "ieee488_device" in idn:
@@ -172,8 +161,26 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
             cmd_goto_eoi = "EOS"
             cmd_test = "*IDN?"
             cmd_expected_reply = "IDN-SGLT-PRI SDG0000X"
-        if len(cmd_test) == 0 or len(cmd_goto_eos) == 0 or len(cmd_goto_eoi) == 0:
-            self.logger.error(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for end condition tests")
+        if "66332A" in idn:
+            cmd_goto_eos = ""
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            cmd_expected_reply = "HEWLETT-PACKARD,66332A,0,A.01.03"
+        if "6634B" in idn:
+            cmd_goto_eos = ""
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            cmd_expected_reply = "HEWLETT-PACKARD,6634B,0,A.01.04"
+        if "HP859" in idn:
+            cmd_goto_eos = ""
+            cmd_goto_eoi = ""
+            cmd_test = "*ID?"
+            cmd_expected_reply = "HP8594E"
+        if test == 0 and (len(cmd_test) == 0 or len(cmd_goto_eos) == 0):
+            # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for EOS test")
+            return {}
+        if len(cmd_test) == 0:
+            # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for end condition tests")
             return {}
         ret.update({
                     "cmds_init": cmds_init, 
