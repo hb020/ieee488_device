@@ -1,19 +1,21 @@
-# IEEE-488.1 (GPIB) device library
+# IEEE-488.1 (GPIB) device and testing tools
+
+## IEEE-488.1 (GPIB) device
 
 Portable gnu-11 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
 
 This can be used to create:
 
 - a standalone test device for GPIB controllers and testing for client programs. This is the main use case. It supports:
-  - identification `*IDN?`
+  - standard identification
   - large writes
   - large reads
   - delay in write
   - delay in read
   - delay in reply
-  - delayed srq generation
+  - delayed or immediate srq generation
   - address change
-  - EOI/EOS configuration
+  - EOI/EOS configuration and live change between modes
   - T1 and T3 configuration
   - TODO: Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
 
@@ -22,9 +24,62 @@ And after slight modification (that means: deactivation  of the test device code
 - a GPIB interface to any device
 - a GPIB-to-LAN gateway (like ICS's 4865)
 
+## Test tools
+
+In `/tests/vxi-11`, there is a manual test suite (that might also be used from automated test tools) for testing a wide range of things regarding VXI-11.2 communication. (With a little bit of work, it can also be used on standalone VXI-11 devices.)
+
+It allows testing of:
+
+- Basic communication
+- End conditions: EOS
+- End conditions: EOI
+- End conditions: Count
+- SRQ: individual, early enable
+- SRQ: individual, late enable
+- SRQ: single emitter, multiple listener
+- SRQ: multiple emitters, single listener
+- Long read
+- Long write
+
+It can be used on any VXI-11.2 compatible gateway, on a range of IVI backends, supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device. Especially the EOS to EOI switching is something that is not easily found elsewhere.
+
+Usage:
+
+```text
+usage: run.py [-h] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10}] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [gateway_ip]
+
+Test SRQ handling for VXI-11.
+
+positional arguments:
+  gateway_ip            The IP address of the gateway device to use for tests.
+
+options:
+  -h, --help            show this help message and exit
+  -a, --addresses ADDRESSES
+                        The addresses on the bus, separated by ';'.
+                        Addresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.
+                        Examples: '1' or '1;2,0;2,1'
+  -V, --visa-provider {py,ni,keysight,rs}
+                        The VISA provider to use. Default is the system default.
+  -T, --test {0,1,2,3,4,5,6,7,8,9,10}
+                         0 All
+                         1 Basic
+                         2 End conditions: EOS
+                         3 End conditions: EOI
+                         4 End conditions: Count
+                         5 SRQ: individual early enable
+                         6 SRQ: individual late enable
+                         7 SRQ: single emitter
+                         8 SRQ: multiple emitters
+                         9 Long read
+                        10 Long write
+  -L, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
+                        The logging level.
+```
+
 ## Status
 
-This is an early version, and will not work when there are other devices on the bus.
+The device is an early version, and will not work when there are other devices on the bus.
 
 Working:
 
@@ -51,12 +106,12 @@ Not compliant:
 
 TODO:
 
-- finish SCPI commands (long read/write)
-  - long write: todo
-  - long read: on very large reads, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that.
-- more testing
+- long read: on very large reads, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that.
+- add testcases for timeouts (delays) in the test script
 
-## Notes on compatibility with gateways
+# More about the IEEE-488.1 (GPIB) device
+
+## Notes on compatibility of the device with gateways
 
 ### E5810A
 
@@ -139,7 +194,7 @@ If you want to move to a better chain, you WILL want to use 'real' atomic variab
 - The implementation supports both normal and extended addressing, selected at runtime. A particular product should advertise only its actual subset.
 - `TCT` is recognized but ignored because the Controller capability is excluded.
 
-# IEEE-488.1 SCPI test commands
+## IEEE-488.1 SCPI test commands
 
 > This is WIP
 
@@ -204,7 +259,7 @@ Note that `EOS` and use of `EOI` are made to be mutually exclusive here. So 'end
 
 The serial interface menu also gives control over some of these parameters, but is more fine grained for some, and without limit checking. It also allows debug output over the serial port.
 
-# Build
+## Build
 
 Via platformio.
 
