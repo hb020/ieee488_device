@@ -160,10 +160,10 @@ The supported commands are:
   - `{SECONDARY}` is the secondary address (0-30). If not given, only the primary address is taken into account
   - Note that the separator is `,`, but `.` or `:` or ` ` is also allowed.
 - `EOS [{TERMCHAR}]` sets the terminating character, where
-  - `{TERMCHAR}` is the decimal value of the terminating character (1-255). If set, it is used for both in- and outgoing communication. If not given or 0, EOS is disabled, and EOI is used for both in- and outgoing communication.
-- `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or 0 when EOS is disabled. See above.
+  - `{TERMCHAR}` is the decimal value of the terminating character (0-255). If set, it is used for both in- and outgoing communication. If not given or -1, EOS is disabled, and EOI is used for both in- and outgoing communication.
+- `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or -1 when EOS is disabled. See above.
 
-Note that `EOS` and `EOI` are made to be mutually exclusive here. So 'end of command' is either based on EOS, either on EOI. End of command is purposefully not automatically detected from CR/LF, CR, LF, or ';'. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with CR/LF, as is the custom.
+Note that `EOS` and use of `EOI` are made to be mutually exclusive here. So 'end of command' is either based on EOS, either on EOI. End of command is purposefully not automatically detected from CR/LF, CR, LF, or ';'. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with CR/LF, as is the custom.
 
 **Communications**:
 

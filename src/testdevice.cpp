@@ -224,6 +224,66 @@ int get_uint32_varvalues(uint32_t* values, size_t num_values) {
     return get_uint32_varvalues(values, num_values, NULL);
 }
 
+/** @brief Parse a string of space separated int16_t integers from in_buffer and fill the values array.
+ *
+ * The values are expected to be in decimal format, separated by whitespace.
+ * The first word in the string is to be ignored.
+ * in_buffer has no leading whitespace, but can have trailing whitespace
+ * and multiple spaces between the values.
+ *
+ * @param values Pointer to an array of int16_t to be filled with the parsed values
+ * @param num_values The number of values to parse and fill in the values array
+ * @param allowed_separators A string of characters that are allowed as single char separators between values (space is always allowed).
+ *        If NULL, only whitespace is allowed.
+ * @return the number of values read
+ */
+int get_int16_varvalues(int16_t* values, size_t num_values, const char* allowed_separators) {
+    const char* ptr = in_buffer;
+    int values_found = 0;
+    if (!values) return 0;
+    // Skip the first word
+    char* endptr;
+    while (*ptr && isspace(*ptr)) ptr++;  // Skip leading whitespace
+    ptr = strchr(ptr, ' ');
+    if (!ptr) return 0;
+
+    while (*ptr && values_found < num_values) {
+        values[values_found++] = (int16_t)strtol(ptr, &endptr, 10);
+        if (ptr == endptr) {
+            // No conversion performed
+            return values_found - 1;  // Return the number of values found so far
+        }
+        ptr = endptr;
+        if (!*ptr) break;  // End of string
+        if (!isspace(*ptr)) {
+            // Invalid character found
+            if (allowed_separators && (!strchr(allowed_separators, *ptr))) {
+                // Invalid character found, stop parsing
+                return values_found - 1;  // Return the number of values found so far
+            }
+            ptr++;  // Skip the allowed separator
+        }
+        while (*ptr && isspace(*ptr)) ptr++;  // Skip whitespace
+    }
+
+    return values_found;
+}
+
+/** @brief Parse a string of space separated int16_t integers from in_buffer and fill the values array.
+ *
+ * The values are expected to be in decimal format, separated by whitespace.
+ * The first word in the string is to be ignored.
+ * in_buffer has no leading whitespace, but can have trailing whitespace
+ * and multiple spaces between the values.
+ *
+ * @param values Pointer to an array of int16_t to be filled with the parsed values
+ * @param num_values The number of values to parse and fill in the values array
+ * @return the number of values read
+ */
+int get_int16_varvalues(int16_t* values, size_t num_values) {
+    return get_int16_varvalues(values, num_values, NULL);
+}
+
 /*
  * The SCPI command set is defined here.
  * Each command has a string and a handler function.
@@ -608,15 +668,15 @@ static scpi_in_state_t eos_handler(uint8_t byte, bool end) {
     (void)byte;                               // Unused parameter
     if (!end) return SCPI_FINISHING_COMMAND;  // Wait for the end of the command to get the parameter
 
-    uint32_t value;
-    if (get_uint32_varvalues(&value, 1) != 1) {
-        value = 0;  // Default to 0 if no parameter is provided
+    int16_t value;
+    if (get_int16_varvalues(&value, 1) != 1) {
+        value = -1;  // Default to 0 if no parameter is provided
     }
-    if (value == 0) {
+    if (value < 0 || value > 255) {
         cfg.eos_enabled = false;  // do not use EOS for incoming messages, use EOI only
         cfg.use_eoi = true;       // Use EOI for outgoing end of message
         // As a side effect, the `endchars()` function will use CR/LF at end of all outgoing messages
-    } else if (value >= 1 && value <= 255) {
+    } else if (value >= 0 && value <= 255) {
         cfg.eos_enabled = true;
         cfg.eos_byte = (uint8_t)value;  // use the provided byte as the EOS character for incoming messages (but EOI still is accepted)
         cfg.use_eoi = false;            // Do not use EOI for outgoing end of message. 
@@ -637,7 +697,7 @@ static scpi_in_state_t eosq_handler(uint8_t byte, bool end) {
     if (cfg.eos_enabled) {
         sprintf(out_buffer, "%u%s", (unsigned int)cfg.eos_byte, endchars());
     } else {
-        sprintf(out_buffer, "0%s", endchars());
+        sprintf(out_buffer, "-1%s", endchars());
     }
     return SCPI_FLUSH;
 }
