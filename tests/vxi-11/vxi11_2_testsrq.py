@@ -163,14 +163,17 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             self.user_handle[inst_nr] = None
             
         cmds = context["cmds_init"]
-        for cmd in cmds:
-            # self.logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
-            if cmd.endswith("?"):
-                resp = inst.query(cmd)
-                # self.logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
-            else:
-                inst.write(cmd)
-            sleep(0.1)
+        try:
+            for cmd in cmds:
+                # self.logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
+                if cmd.endswith("?"):
+                    resp = inst.query(cmd)
+                    # self.logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
+                else:
+                    inst.write(cmd)
+                sleep(0.1)
+        except Exception as e:
+            self.logger.debug(f"Failed to send init commands to {resource_name}: {e}")
         try:
             inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
         except Exception as e:
