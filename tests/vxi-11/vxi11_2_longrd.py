@@ -92,6 +92,7 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         """
         # The reply should be a comma-separated list of floats, with length equal to expected_len
         try:
+            context["inst"].timeout = expected_len * 4  # this can be slow
             reply = context["inst"].query_ascii_values(cmd_read)
             self.logger.debug(f"instrument nr {inst_nr}: received reply: {reply}")
             if len(reply) != expected_len:
