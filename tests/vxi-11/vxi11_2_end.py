@@ -157,8 +157,8 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
             cmd_test = "LONGRD? 10"
             cmd_expected_reply = "0123456789"
         if "IDN-SGLT-PRI" in idn: # dummy device tests
-            cmd_goto_eos = "EOS 10"
-            cmd_goto_eoi = "EOS"
+            cmd_goto_eos = ""
+            cmd_goto_eoi = ""
             cmd_test = "*IDN?"
             cmd_expected_reply = "IDN-SGLT-PRI SDG0000X"
         if "66332A" in idn:
