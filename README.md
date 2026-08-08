@@ -4,29 +4,30 @@
 
 Portable gnu-11 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
 
-This can be used to create:
+This can be used to create a standalone test device for GPIB controllers and testing for client programs. 
 
-- a standalone test device for GPIB controllers and testing for client programs. This is the main use case. It supports:
-  - standard identification
-  - large writes
-  - large reads
-  - delay in write
-  - delay in read
-  - delay in reply
-  - delayed or immediate srq generation
-  - address change
-  - EOI/EOS configuration and live change between modes
-  - T1 and T3 configuration
-  - TODO: Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
+This is the main use case. It supports:
 
-And after slight modification (that means: deactivation  of the test device code):
+- standard identification
+- large writes
+- large reads
+- delay in write
+- delay in read
+- delay in reply
+- delayed or immediate srq generation
+- address change
+- EOI/EOS configuration and live change between modes
+- T1 and T3 configuration
+- TODO: Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
+
+And after slight modification (that means: deactivation  of the test device code), you could use this code to create:
 
 - a GPIB interface to any device
 - a GPIB-to-LAN gateway (like ICS's 4865)
 
 ## Test tools
 
-In `/tests/vxi-11`, there is a manual test suite (that might also be used from automated test tools) for testing a wide range of things regarding VXI-11.2 communication. (With a little bit of work, it can also be used on standalone VXI-11 devices.)
+In `/tests/vxi-11`, there is a test suite (that can be used from automated test tools) for testing a wide range of things regarding VXI-11.2 communication. (With a little bit of work, it can also be used on standalone VXI-11 devices.)
 
 It allows testing of:
 
@@ -41,7 +42,7 @@ It allows testing of:
 - Long read
 - Long write
 
-It can be used on any VXI-11.2 compatible gateway, on a range of IVI backends, supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device. Especially the EOS to EOI switching is something that is not easily found elsewhere.
+It can be used on any VXI-11.2 compatible gateway, on a range of IVI backends, and supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device. Especially the EOS to EOI switching is something that is not easily found elsewhere.
 
 Usage:
 
