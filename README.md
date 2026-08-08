@@ -108,6 +108,11 @@ Not compliant:
 TODO:
 
 - long read: on very large reads, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that.
+- Add a setting to the test script that enables or disables the chunk size tweaking
+- add support for parallel polling control commands
+  - *IST? Individual Status Query?
+  - *PRE Parallel Poll Register Enable Command
+  - *PRE? Parallel Poll Register Enable Query
 - add testcases for timeouts (delays) in the test script
 
 # More about the IEEE-488.1 (GPIB) device
