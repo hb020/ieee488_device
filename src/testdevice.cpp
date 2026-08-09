@@ -1004,8 +1004,8 @@ void device_rx(uint8_t byte, bool end) {
 
 void device_clear(bool selected) {
     cls_handler(0, true);
-    Serial.print(selected ? "selected" : "universal");
-    Serial.println(" clear");
+    // Serial.print(selected ? "selected" : "universal");
+    // Serial.println(" clear");
 }
 
 void device_trigger(void) {

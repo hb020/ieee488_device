@@ -13,6 +13,7 @@
 
 #define DEFAULT_DEBUG_LEVEL 0
 
+// If you change these defaults, please adapt the readme.md file
 #define DEFAULT_PRIMARY_ADDRESS 5
 #define DEFAULT_SECONDARY_ADDRESS 1
 #define DEFAULT_EXTENDED_ADDRESS false

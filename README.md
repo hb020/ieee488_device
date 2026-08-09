@@ -224,11 +224,11 @@ The supported commands are:
 - `*CLS` will clear errors and buffers, and reset the timing/delay settings
 - `*RST` will reset to default configuration (except address)
 - `ADDR {PRIMARY}[,{SECONDARY}]` set the address, where
-  - `{PRIMARY}` is the primary address (0-30)
-  - `{SECONDARY}` is the secondary address (0-30). If not given, only the primary address is taken into account
-  - Note that the separator is `,`, but `.` or `:` or ` ` is also allowed.
+  - `{PRIMARY}` is the primary address (0-30). Default: 5.
+  - `{SECONDARY}` is the secondary address (0-30). If not given, only the primary address is taken into account. Default: none.
+  - Note that the separator is ',', but '.' or ':' or ' ' is also allowed.
 - `EOS [{TERMCHAR}]` sets the terminating character, where
-  - `{TERMCHAR}` is the decimal value of the terminating character (0-255). If set, it is used for both in- and outgoing communication. If not given or -1, EOS is disabled, and EOI is used for both in- and outgoing communication.
+  - `{TERMCHAR}` is the decimal value of the terminating character (0-255). If set, it is used for both in- and outgoing communication. If not given or -1, EOS is disabled, and EOI is used for both in- and outgoing communication.  Default: -1 (disabled).
 - `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or -1 when EOS is disabled. See above.
 
 Note that `EOS` and use of `EOI` are made to be mutually exclusive in this device. So 'end of command' is either based on EOS, either on EOI. End of command is purposefully not automatically detected from CR/LF, CR, LF, or ';'. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will be terminated with CR/LF, and all trailing whitespace is stripped the input, as is the custom.
@@ -247,27 +247,27 @@ Note that `EOS` and use of `EOI` are made to be mutually exclusive in this devic
 **Communications timing**:
 
 - `SLOWWR {MSECS}` Adds an arbitrary delay time between data byte acceptance by the device, where
-  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10000 (10 secs).
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10000 (10 secs). Default: 0 (disabled).
 - `SLOWWR?` Returns the value (in decimal) of the time set by `SLOWWR`
 - `SLOWRD {MSECS}` Adds an arbitrary delay time between transmitting of data bytes by the device, where
-  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10000 (10 secs).
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10000 (10 secs). Default: 0 (disabled).
 - `SLOWRD?` Returns the value (in decimal) of the time set by `SLOWRD`
 - `DELAYRD {MSECS}` Adds an arbitrary delay time between a received command and transmission of a reply, where
-  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10800000 (3 hours).
+  - `{MSECS}` is the delay time in milliseconds. 0 to disable. Capped between 0 and 10800000 (3 hours). Default: 0 (disabled).
 - `DELAYRD?` Returns the value (in decimal) of the time set by `DELAYRD`
 
 **SRQ**:
 
-- `SRQ [{MSECS}]` for the activation of SRQ, after an optional delay, where
+- `SRQ [{MSECS}]` force assertion of SRQ, after an optional delay, where
   - `{MSECS}` is the delay time in milliseconds. The delay will not be reset by other commands (except `*CLS` and `*RST`, but they're supposed to do that), so you can time the SRQ to arrive during a communication. Capped between 0 and 10800000 (3 hours). If 0 or not provided: SRQ is immediate.
 
 **Bus timing**:
 
 - `T1 {USECS}` sets the T1 time (settling time for multiline messages) where
-  - `{USECS}` is the delay time in microseconds. Capped between 2 and 1000000 (2 µs to 1 sec).
+  - `{USECS}` is the delay time in microseconds. Capped between 2 and 1000000 (2 µs to 1 sec). Default: 10µs.
 - `T1?` Returns the value (in decimal) of the time set by `T1 {USECS}`
 - `T3 {USECS}` sets the T3 time (interface message accept time, or handshake time) where
-  - `{USECS}` is the delay time in microseconds. Capped between 0 and 10000000 (10 secs). 0 means: no timeout. If you set it to a small value, data will be lost.
+  - `{USECS}` is the delay time in microseconds. Capped between 0 and 10000000 (10 secs). 0 means: no timeout. If you set it to a small value, data will be lost. Default: 0 (disabled).
 - `T3?` Returns the value (in decimal) of the time set by `T3 {USECS}`
 
 The serial interface menu also gives control over some of these parameters, but is more fine grained for some, and without limit checking. It also allows debug output over the serial port.
