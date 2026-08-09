@@ -221,7 +221,7 @@ The supported commands are:
   - `{GPIB address}` is the address on the bus, potentially with `.` separator for secondary address, like `5.1`
   - `{software version}` is the software version, like `0.9`
 - `:SYSTEM:ERROR?` replies with the last error. As usual.
-- `*CLS` will clear errors and buffers, and reset the timing/delay settings
+- `*CLS` will clear errors and buffers, clears SRQ, and resets the Read/Write/Reply delay settings
 - `*RST` will reset to default configuration (except address)
 - `ADDR {PRIMARY}[,{SECONDARY}]` set the address, where
   - `{PRIMARY}` is the primary address (0-30). Default: 5.
