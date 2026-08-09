@@ -41,15 +41,19 @@ It allows testing of:
 - SRQ: multiple emitters, single listener
 - Long read
 - Long write
-
+- Delay: in writing
+- Delay: in reading
+- Delay: in reply
+ 
 It can be used on any VXI-11.2 compatible gateway, on a range of IVI backends, and supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device. Especially the EOS to EOI switching is something that is not easily found elsewhere.
 
 Usage:
 
 ```text
-usage: run.py [-h] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10}] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [gateway_ip]
+python3 run.py -h
+usage: run.py [-h] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13}] [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [gateway_ip]
 
-Test SRQ handling for VXI-11.
+Test VXI-11.2 gateway and devices
 
 positional arguments:
   gateway_ip            The IP address of the gateway device to use for tests.
@@ -62,7 +66,7 @@ options:
                         Examples: '1' or '1;2,0;2,1'
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
-  -T, --test {0,1,2,3,4,5,6,7,8,9,10}
+  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13}
                          0 All
                          1 Basic
                          2 End conditions: EOS
@@ -74,6 +78,11 @@ options:
                          8 SRQ: multiple emitters
                          9 Long read
                         10 Long write
+                        11 Delay: write
+                        12 Delay: read
+                        13 Delay: reply
+  -cs, --auto-chunk-size
+                        Enable automatic chunk size correction, needed with some gateways for the long reads/writes.
   -L, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         The logging level.
 ```
@@ -107,12 +116,11 @@ Not compliant:
 
 ### TODO
 
-- long read: on very large reads, when using NI-VISA, and my custom gateway, In some cases I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. For now, use the `--auto-chunk-size` command line parameter to the test script.
+- long read: on very large reads, when using NI-VISA, and my custom gateway, In some cases, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. For now, use the `--auto-chunk-size` command line parameter to the test script.
 - add support for parallel polling control commands to the device
   - *IST? Individual Status Query?
   - *PRE Parallel Poll Register Enable Command
   - *PRE? Parallel Poll Register Enable Query
-- add testcases for timeouts (delays) in the test script
 
 # More about the IEEE-488.1 (GPIB) device
 

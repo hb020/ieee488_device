@@ -347,12 +347,15 @@ static scpi_in_state_t err_handler(uint8_t byte, bool end) {
 /* `*CLS` */
 static scpi_in_state_t cls_handler(uint8_t byte, bool end) {
     // This is the *CLS command handler.
-    // It clears the error queue of the device.
+    // It clears the error queue of the device and all in- and output buffers.
     (void)byte;                      // Unused parameter
     (void)end;                       // Unused parameter
     scpi_error_state = SCPI_NONE;    // Clear the error state
     restart_in();                    // Clear the input buffer
     restart_out();                   // Clear the output buffer
+    cfg.rx_delay_ms = 0;             // Clear the RX delay
+    cfg.tx_delay_ms = 0;             // Clear the TX delay
+    cfg.reply_delay_ms = 0;          // Clear the reply delay
     rx_deadline = 0;                 // Clear the RX delay
     tx_deadline = 0;                 // Clear the TX delay
     srq_deadline = 0;                // Clear the SRQ delay

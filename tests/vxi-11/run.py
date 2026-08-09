@@ -23,6 +23,7 @@ from vxi11_2_testsrq import VXI11_2_testsrq
 from vxi11_2_longrd import VXI11_2_longrd
 from vxi11_2_longwr import VXI11_2_longwr
 from vxi11_2_end import VXI11_2_end
+from vxi11_2_delay import VXI11_2_delay
 import logging
 import argparse
 import sys
@@ -54,9 +55,9 @@ if __name__ == "__main__":
     # Use 2 digits for the number, so that the list is nicely aligned. The first test is 0, which means all tests.
     test_names = " 0 All\n"
     # The test classes to use
-    testers = [VXI11_2_Base, VXI11_2_end, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr]
+    testers = [VXI11_2_Base, VXI11_2_end, VXI11_2_testsrq, VXI11_2_longrd, VXI11_2_longwr, VXI11_2_delay]
     # the file names. Not much logging in their name, but anyway.
-    logger_names = ["vxi11_2_base", "vxi11_2_end", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr"]
+    logger_names = ["vxi11_2_base", "vxi11_2_end", "vxi11_2_testsrq", "vxi11_2_longrd", "vxi11_2_longwr", "vxi11_2_delay"]
     # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
     test_steps = []
     global_test_nr = 1
@@ -69,7 +70,7 @@ if __name__ == "__main__":
             test_names = test_names + f"{global_test_nr:2} {step}\n"
             global_test_nr += 1
 
-    parser = argparse.ArgumentParser(description="Test SRQ handling for VXI-11.",
+    parser = argparse.ArgumentParser(description="Test VXI-11.2 gateway and devices",
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("gateway_ip", type=str, nargs="?", default=DEFAULT_GATEWAY_IP, help="The IP address of the gateway device to use for tests.")
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'")
