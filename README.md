@@ -9,14 +9,14 @@ This can be used to create a standalone test device for GPIB controllers, or cli
 This is the main use case. It supports:
 
 - standard identification
-- large writes
-- large reads
-- delay in write
-- delay in read
-- delay in reply
+- arbitrarily large writes
+- arbitrarily large reads
+- customisable inter-character delay during write
+- customisable inter-character delay during read
+- customisable delay for reply
 - delayed or immediate srq generation
-- address change
-- EOI/EOS configuration and live change between modes
+- live address change, including secondary addresses
+- EOI/EOS configuration and live change between EOI/EOS modes
 - T1 and T3 configuration
 - TODO: Maybe also ppol, but VXI-11 and ppoll do not go well together, so that is for later
 
@@ -44,7 +44,7 @@ It allows testing of:
 - Delay: in writing
 - Delay: in reading
 - Delay: in reply
- 
+
 It can be used on any VXI-11.2 compatible gateway, on a range of IVI backends, and supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device. Especially the EOS to EOI switching is something that is not easily found elsewhere.
 
 Usage:
@@ -116,7 +116,7 @@ Not compliant:
 
 ### TODO
 
-- long read: on very large reads, when using NI-VISA, and my custom gateway, In some cases, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. For now, use the `--auto-chunk-size` command line parameter to the test script.
+- on very large reads, when using NI-VISA, and my custom gateway, In some cases, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. You can automatically adapt the chunk size to be bigger than the expected data, via the `--auto-chunk-size` command line parameter to the test script.
 - add support for parallel polling control commands to the device
   - *IST? Individual Status Query?
   - *PRE Parallel Poll Register Enable Command
