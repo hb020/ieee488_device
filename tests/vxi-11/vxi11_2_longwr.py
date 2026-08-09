@@ -89,8 +89,10 @@ class VXI11_2_longwr(vxi11_2_base.VXI11_2_Base):
         # else: 100us per character on a atmega4809, with overhead
         # timeout is in ms
         inst.timeout = expected_len * 0.15  # non-debug mode
-        if expected_len > 20000:
-            inst.chunk_size = expected_len + 1000  # increase chunk size for large reads
+        if self.options.get("auto_chunk_size", False):
+            if expected_len > 20000:
+                inst.chunk_size = expected_len + 1000  # increase chunk size for large reads
+                self.logger.debug(f"instrument nr {inst_nr}: auto chunk size enabled, set chunk size to {inst.chunk_size} for expected length {expected_len}")                
         data = "".join(chr(0x30 + (i % (0x7E - 0x30 + 1))) for i in range(expected_len))
         if len(data) != expected_len:
             self.logger.error(f"Failed to create data of length {expected_len}, got length {len(data)}")

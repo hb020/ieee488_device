@@ -75,8 +75,10 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'")
     parser.add_argument("-V", "--visa-provider", type=str, default=DEFAULT_PROVIDER, choices=VXI11_2_Base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
     parser.add_argument("-T", "--test", type=int, default=DEFAULT_TEST, choices=range(0, len(test_steps)+1), help=test_names)
+    parser.add_argument("-cs", "--auto-chunk-size", action="store_true", help="Enable automatic chunk size correction, needed with some gateways for the long reads/writes.")
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
     
+    options = {}
     args = parser.parse_args()
     # set log levels
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
@@ -89,6 +91,7 @@ if __name__ == "__main__":
     # The files themselves also have loggers for various stuff.
     for logger_name in logger_names:
         logging.getLogger(logger_name).setLevel(log_level)
+    options["auto_chunk_size"] = args.auto_chunk_size
     
     addresses = args.addresses
     if isinstance(addresses, int):
@@ -101,6 +104,10 @@ if __name__ == "__main__":
     test_to_run = args.test
     gateway_ip = args.gateway_ip
     visa_provider = args.visa_provider
+    if len(visa_provider) == 0:
+        visa_provider = None
+    
+    logger.info(f"Using gateway IP: '{gateway_ip}', addresses: '{addresses}', VISA provider: '{visa_provider if visa_provider else 'default'}', test to run: {test_to_run if test_to_run != 0 else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}")
     
     # determine tests to run
     ok = True
@@ -110,7 +117,7 @@ if __name__ == "__main__":
     for i, (tester, step, global_test_nr, local_test_nr) in enumerate(test_steps):
         if global_test_nr == test_to_run or test_to_run == 0:
             try:
-                t = tester(visa_provider, gateway_ip, addresses)
+                t = tester(visa_provider, gateway_ip, addresses, options)
             except Exception as e:
                 logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
                 sys.exit(1) 

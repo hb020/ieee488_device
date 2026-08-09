@@ -123,8 +123,10 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         # else: 140us per character on a atmega4809, with overhead
         # timeout is in ms
         inst.timeout = expected_len * 0.2  # non-debug mode
-        if expected_len > 20000:
-            inst.chunk_size = expected_len + 1000  # increase chunk size for large reads
+        if self.options.get("auto_chunk_size", False):
+            if expected_len > 20000:
+                inst.chunk_size = expected_len + 1000  # increase chunk size for large reads
+                self.logger.debug(f"instrument nr {inst_nr}: auto chunk size enabled, set chunk size to {inst.chunk_size} for expected length {expected_len}")
         try:
             reply = inst.query(cmd_read)
             self.logger.debug(f"instrument nr {inst_nr}: received reply: {reply}")

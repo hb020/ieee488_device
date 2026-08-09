@@ -39,12 +39,13 @@ class VXI11_2_Base(object):
     """
     
     skipped: int = 0  # number of tests skipped in this test class
+    options: dict = {}
     
     @property
     def logger(self):
         return logging.getLogger(f"{self.__class__.__name__}")
     
-    def __init__(self, visa_provider: Optional[str], gateway_ip: str, inst_addresses: str):
+    def __init__(self, visa_provider: Optional[str], gateway_ip: str, inst_addresses: str, options: dict = {}):
         """Initialize the VXI-11.2 base test case.
 
         :param visa_provider: The VISA provider to use ('py', 'ni', 'keysight', 'rs', or None).
@@ -68,6 +69,7 @@ class VXI11_2_Base(object):
         if self.inst_addresses is None:
             raise ValueError(f"Invalid instrument addresses: {inst_addresses}")
         self.visa_provider = visa_provider
+        self.options = options
         self._inst_contexts = {}
         self.rm, self.visa_provider = self.get_resource_manager(visa_provider)
         self.logger.debug(f"Using VISA provider: {self.visa_provider}")

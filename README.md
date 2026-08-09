@@ -4,7 +4,7 @@
 
 Portable gnu-11 implementation of an IEEE-488.1 **device-side** interface, excluding the Controller (`C`) interface function.
 
-This can be used to create a standalone test device for GPIB controllers and testing for client programs. 
+This can be used to create a standalone test device for GPIB controllers, or client programs.
 
 This is the main use case. It supports:
 
@@ -105,11 +105,10 @@ Not compliant:
   - A faster CPU, or elaborated CCL, is required.
   - Interrupt handling on DAV (fetching commands) might be a possible protection against missing commands, but it is unlikely to succeed, since I'd need below 1 µs handling.
 
-TODO:
+### TODO
 
-- long read: on very large reads, when using NI-VISA, and my gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that.
-- Add a setting to the test script that enables or disables the chunk size tweaking
-- add support for parallel polling control commands
+- long read: on very large reads, when using NI-VISA, and my custom gateway, In some cases I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. For now, use the `--auto-chunk-size` command line parameter to the test script.
+- add support for parallel polling control commands to the device
   - *IST? Individual Status Query?
   - *PRE Parallel Poll Register Enable Command
   - *PRE? Parallel Poll Register Enable Query
