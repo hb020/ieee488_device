@@ -221,8 +221,8 @@ The supported commands are:
   - `{GPIB address}` is the address on the bus, potentially with `.` separator for secondary address, like `5.1`
   - `{software version}` is the software version, like `0.9`
 - `:SYSTEM:ERROR?` replies with the last error. As usual.
-- `*CLS` will clear errors
-- `*RST` will reset to default configuration
+- `*CLS` will clear errors and buffers, and reset the timing/delay settings
+- `*RST` will reset to default configuration (except address)
 - `ADDR {PRIMARY}[,{SECONDARY}]` set the address, where
   - `{PRIMARY}` is the primary address (0-30)
   - `{SECONDARY}` is the secondary address (0-30). If not given, only the primary address is taken into account
@@ -231,7 +231,7 @@ The supported commands are:
   - `{TERMCHAR}` is the decimal value of the terminating character (0-255). If set, it is used for both in- and outgoing communication. If not given or -1, EOS is disabled, and EOI is used for both in- and outgoing communication.
 - `EOS?` queries the actual terminating character and replies with `{TERMCHAR}`, or -1 when EOS is disabled. See above.
 
-Note that `EOS` and use of `EOI` are made to be mutually exclusive here. So 'end of command' is either based on EOS, either on EOI. End of command is purposefully not automatically detected from CR/LF, CR, LF, or ';'. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will still be terminated with CR/LF, as is the custom.
+Note that `EOS` and use of `EOI` are made to be mutually exclusive in this device. So 'end of command' is either based on EOS, either on EOI. End of command is purposefully not automatically detected from CR/LF, CR, LF, or ';'. When `EOS` is deactivated (hence `EOI` activated), all outgoing communications will be terminated with CR/LF, and all trailing whitespace is stripped the input, as is the custom.
 
 **Communications**:
 

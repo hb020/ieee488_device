@@ -1012,7 +1012,7 @@ void device_trigger(void) {
     Serial.println("trigger");
 }
 
-uint8_t status_byte(void) {
+uint8_t status_byte(void) {    
     uint8_t status = 0x00;
     if (out_counter < strlen(out_buffer)) {
         status |= 0x01;  // Message available bit set
@@ -1020,6 +1020,7 @@ uint8_t status_byte(void) {
     if (scpi_error_state != SCPI_NONE) {
         status |= 0x04;  // Syntax error bit set
     }
+    // I do not have to worry about the SRQ bit, as it is handled by the IEEE-488 state machine itself
     return status;
 }
 
