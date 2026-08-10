@@ -89,7 +89,7 @@ options:
 
 ## Status
 
-The device is an early version, and will not work when there are other devices on the bus.
+The device is pretty feature complete, works well behind on multiple controllers, and has a rather complete test suite. I will however need to move to faster device hardware if I want to be able to use it when there are other devices on the bus.
 
 Working:
 
@@ -116,11 +116,11 @@ Not compliant:
 
 ### TODO
 
-- on very large reads, when using NI-VISA, and my custom gateway, In some cases, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. You can automatically adapt the chunk size to be bigger than the expected data, via the `--auto-chunk-size` command line parameter to the test script.
-- add support for parallel polling control commands to the device
-  - *IST? Individual Status Query?
-  - *PRE Parallel Poll Register Enable Command
-  - *PRE? Parallel Poll Register Enable Query
+- In some cases, on very large reads, when using NI-VISA and my custom gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. You can automatically adapt the chunk size to be bigger than the expected data, via the `--auto-chunk-size` command line parameter to the test script.
+- Add support for parallel polling control commands to the device
+  - `*IST?` Individual Status Query?
+  - `*PRE` Parallel Poll Register Enable Command
+  - `*PRE?` Parallel Poll Register Enable Query
 
 # More about the IEEE-488.1 (GPIB) device
 
@@ -136,8 +136,8 @@ At the time of writing, a couple of PRs are open at the AR488 repo regarding ppo
 
 ### Side quests on "find"
 
-- E5810A tests adress "N". If it does not reply, it tests adresses "N,0". If that replies, it will also test the other "N,(1-30)" address combinations. The sequence for a test of '5,x' where T = 21 and 5,0 exists is: `...,UNL,T21,L05,UNL,T21,L05,S00,UNL,T21,L05,S01,UNL,T21,L05,S02,UNL,...`
-- AR488 tests address "N". If it does not reply, it sends the primary address and then all secondary addresses in sequence without looking at NDAC. If at the end it finds NDAC asserted, it will test address "N,0" properly, and then tests all secondary addresses without interlacing the "Talk to" address between the tests. Unless AR488 PR #87 is solved, it will however fail to detect any address other than 0 because it is non compliant.
+- E5810A tests adress "N". If it does not reply, it tests adresses "N,0". If that replies, it will also test the other "N,(1-30)" address combinations one by one.
+- AR488 tests address "N". If it does not reply, it sends the primary address and then all secondary addresses in sequence without looking at NDAC. If at the end it finds NDAC asserted, it will test address "N,0" properly, and then tests all secondary addresses one by one without interlacing the "Talk to" address between the tests. Unless AR488 PR #87 is solved, it will however fail to detect any address other than 0 because it is non compliant.
 
 ## Supported functions/capabilities
 
