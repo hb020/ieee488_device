@@ -41,7 +41,7 @@ class VXI11_2_delay(vxi11_2_base.VXI11_2_Base):
         
         original_timeout = inst.timeout
         expected_delay = original_timeout
-        min_delay = 10  # minimum delay in milliseconds
+        min_delay = 2  # minimum delay in milliseconds
         if test == 0:
             expected_delay = delay_time_ms + 100  # add some slack for the communication overhead
             min_delay = (delay_time_ms * 0.9) + 100
@@ -64,7 +64,7 @@ class VXI11_2_delay(vxi11_2_base.VXI11_2_Base):
             min_delay = (delay_time_ms * 0.9) + 100
         else:
             expected_delay = original_timeout
-            min_delay = 10  # minimum delay in milliseconds
+            min_delay = 2  # minimum delay in milliseconds
         inst.timeout = expected_delay
         timer_start = time.time()
         reply = ""
