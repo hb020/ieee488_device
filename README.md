@@ -117,6 +117,7 @@ Not compliant:
 ### TODO
 
 - In some cases, on very large reads, when using NI-VISA and my custom gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. You can automatically adapt the chunk size to be bigger than the expected data, via the `--auto-chunk-size` command line parameter to the test script.
+- Allow it to support multiple addresses, and have independent SCPI handlers. That risks being messy though, since the state machine is geared towards a single address, especially around the SPAS state and the SRQ message handling.
 - Add support for parallel polling control commands to the device
   - `*IST?` Individual Status Query?
   - `*PRE` Parallel Poll Register Enable Command
