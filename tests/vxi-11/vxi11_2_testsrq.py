@@ -52,7 +52,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
     ###############################################################################################
     @classmethod
     def testmethods(cls) -> list[str]:
-        return ["SRQ: individual early enable", "SRQ: individual late enable", "SRQ: single emitter", "SRQ: multiple emitters"]
+        return ["SRQ: individual early enable", "SRQ: individual late enable", "SRQ: individual, repeated", "SRQ: single emitter", "SRQ: multiple emitters"]
 
     def run(self, test: int) -> bool:
         # reset the counters for this test run. They are maintained inside the _test_.... methods
@@ -63,15 +63,18 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         testname = f"Test \"{self.testmethods()[test]}\""
         # self.logger.info(f"{testname}: Start")  # no need to log, the individual tests will log their own start and end
         if (test == 0):
-            if not self._test_individual_srqs(early_enable=True, testname=testname, test=test):
+            if not self._test_individual_srqs(early_enable=True, nr_runs=1, testname=testname, test=test):
                 ok = False
         if (test == 1):
-            if not self._test_individual_srqs(early_enable=False, testname=testname, test=test):
+            if not self._test_individual_srqs(early_enable=False, nr_runs=1, testname=testname, test=test):
                 ok = False
         if (test == 2):
-            if not self._test_one_emitting_srq(testname=testname, test=test):
+            if not self._test_individual_srqs(early_enable=True, nr_runs=10, testname=testname, test=test):
                 ok = False
         if (test == 3):
+            if not self._test_one_emitting_srq(testname=testname, test=test):
+                ok = False
+        if (test == 4):
             if not self._test_multiple_emitting_srq(testname=testname, test=test):
                 ok = False
         # no need to log, the individual tests will log their own start and end
@@ -93,6 +96,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         cmds_srq_enable = []
         cmds_srq_provoke = ""  # mandatory, must be set for instruments that support SRQ, otherwise the test will be skipped for that instrument
         cmds_srq_disable = []
+        cmds_clear = ["*CLS"]
         if "STMEthernet2GPIB" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
             cmds_srq_enable = ["*ESE 254", "*SRE 4"]
@@ -132,7 +136,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
             # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for SRQ tests")
             return {}
 
-        return {"cmds_init": cmds_init, "cmds_srq_enable": cmds_srq_enable, "cmds_srq_provoke": cmds_srq_provoke, "cmds_srq_disable": cmds_srq_disable}
+        return {"cmds_init": cmds_init, "cmds_srq_enable": cmds_srq_enable, "cmds_srq_provoke": cmds_srq_provoke, "cmds_srq_disable": cmds_srq_disable, "cmds_clear": cmds_clear}
     
     def close_instrument(self, inst_nr) -> bool:
         context = self._inst_contexts[inst_nr]
@@ -267,16 +271,8 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
         # not expected SRQ: MAY have been called, and STB must not have SRQ bit set
         called_nr = srq_called.get(inst_nr, 0)
 
-        ignore_stb = False
-        if not ignore_stb:
-            stb1 = inst.read_stb()
-            stb2 = inst.read_stb()
-        else:
-            # old versions of pyvisa-py do not return the correct STB value, so we fake it
-            stb1 = inst.read_stb()
-            stb2 = stb1 & ~0x40
-            if expected_SRQ:
-                stb1 = stb1 | 0x40
+        stb1 = inst.read_stb()
+        stb2 = inst.read_stb()
         stb1_has_srq = stb1 & 0x40
         stb2_has_srq = stb2 & 0x40
         if expected_SRQ and stb1_has_srq == 0:
@@ -298,7 +294,7 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
     ###############################################################################################
     
     # Test SRQ handling for a range of instruments on the bus, one after the other
-    def _test_individual_srqs(self, early_enable: bool, testname: str, test: int) -> bool:
+    def _test_individual_srqs(self, early_enable: bool, nr_runs: int, testname: str, test: int) -> bool:
         retvalue = True
                 
         global_testname = f"{testname} for {len(self._inst_contexts)} instrument{'s' if len(self._inst_contexts) != 1 else ''}"
@@ -324,26 +320,42 @@ class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
                 if not self._prepare_to_listen_for_srq(inst_nr, context):
                     self.logger.error(f"{testname}: Failed to prepare for SRQ listening for {resource_name}")
                     this_instrument_ok = False
-            if this_instrument_ok:
-                if early_enable:
-                    if not self._enable_listen_for_srq(inst_nr, context):
-                        self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                    
+            for run in range(nr_runs):
+                if this_instrument_ok:
+                    if early_enable and run == 0:
+                        if not self._enable_listen_for_srq(inst_nr, context):
+                            self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                            this_instrument_ok = False
+                if this_instrument_ok:
+                    if not self._emit_srq(inst_nr, context):
+                        self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
                         this_instrument_ok = False
-            if this_instrument_ok:
-                if not self._emit_srq(inst_nr, context):
-                    self.logger.error(f"{testname}: Failed to emit SRQ for {resource_name}")
-                    this_instrument_ok = False
-            if this_instrument_ok:
-                if not early_enable:
-                    if not self._enable_listen_for_srq(inst_nr, context):
-                        self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                if this_instrument_ok:
+                    if not early_enable and run == 0:
+                        if not self._enable_listen_for_srq(inst_nr, context):
+                            self.logger.error(f"{testname}: Failed to enable SRQ listening for {resource_name}")
+                            this_instrument_ok = False
+                if this_instrument_ok:
+                    if not self._wait_srq_for_instr(inst_nr, context):
+                        self.logger.error(f"{testname}: Failed to wait for SRQ for {resource_name}")
                         this_instrument_ok = False
-            if this_instrument_ok:
-                if not self._wait_srq_for_instr(inst_nr, context):
-                    self.logger.error(f"{testname}: Failed to wait for SRQ for {resource_name}")
-                    this_instrument_ok = False
-            if this_instrument_ok:
-                this_instrument_ok, _, _ = self._check_if_had_srq(inst_nr, True, 1, testname, context)
+                        
+                if this_instrument_ok:
+                    this_instrument_ok, _, _ = self._check_if_had_srq(inst_nr, True, run + 1, testname, context)
+                    
+                if this_instrument_ok:
+                    # flush error queue, so that the next run will not see the previous SRQ
+                    inst = context["inst"]
+                    for cmd in context["cmds_clear"]:
+                        # self.logger.debug(f"Sending {cmd} to {resource_name}, 0x{inst.read_stb():02X}")
+                        if cmd.endswith("?"):
+                            resp = inst.query(cmd)
+                            # self.logger.debug(f"Query {cmd} returned {resp.strip()} from {resource_name}, STB=0x{inst.read_stb():02X}")
+                        else:
+                            inst.write(cmd)
+                        sleep(0.1)
+                    
             self.close_instrument(inst_nr)
             if this_instrument_ok:
                 self.logger.info(f"{testname}: {resource_name} is OK")

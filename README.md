@@ -51,7 +51,7 @@ Usage:
 
 ```text
 python3 run.py -h
-usage: run.py [-h] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13}] [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [gateway_ip]
+usage: run.py [-h] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}] [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [gateway_ip]
 
 Test VXI-11.2 gateway and devices
 
@@ -66,7 +66,7 @@ options:
                         Examples: '1' or '1;2,0;2,1'
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
-  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13}
+  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}
                          0 All
                          1 Basic
                          2 End conditions: EOS
@@ -74,13 +74,14 @@ options:
                          4 End conditions: Count
                          5 SRQ: individual early enable
                          6 SRQ: individual late enable
-                         7 SRQ: single emitter
-                         8 SRQ: multiple emitters
-                         9 Long read
-                        10 Long write
-                        11 Delay: write
-                        12 Delay: read
-                        13 Delay: reply
+                         7 SRQ: individual, repeated
+                         8 SRQ: single emitter
+                         9 SRQ: multiple emitters
+                        10 Long read
+                        11 Long write
+                        12 Delay: write
+                        13 Delay: read
+                        14 Delay: reply
   -cs, --auto-chunk-size
                         Enable automatic chunk size correction, needed with some gateways for the long reads/writes.
   -L, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
