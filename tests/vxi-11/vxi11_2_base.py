@@ -226,7 +226,9 @@ class VXI11_2_Base(object):
         :rtype: str
         """
         if self.visa_provider == "rs":
-            return f"TCPIP::{self.gateway_ip}::inst{addr}::INSTR"
+            # RS requires it to start with "inst". You can set the SICL in the gateway generally
+            # E5810 requires SICL in that case to be set to "inst0", making the GPIB device 5:1 to become inst0,5,1.
+            return f"TCPIP::{self.gateway_ip}::inst0,{addr}::INSTR"
         else:
             return f"TCPIP::{self.gateway_ip}::gpib0,{addr}::INSTR"
      
