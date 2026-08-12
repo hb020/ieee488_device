@@ -89,6 +89,8 @@ if __name__ == "__main__":
     # The test classes gave their own loggers.
     for tester in testers:
         logging.getLogger(f"{tester.__name__}").setLevel(log_level)
+        
+    logging.getLogger("pyvisa").setLevel(log_level)
     # The files themselves also have loggers for various stuff.
     for logger_name in logger_names:
         logging.getLogger(logger_name).setLevel(log_level)
