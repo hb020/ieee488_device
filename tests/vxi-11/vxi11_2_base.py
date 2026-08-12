@@ -1,3 +1,4 @@
+from time import sleep
 from typing import Optional
 import sys
 import os
@@ -446,10 +447,13 @@ class VXI11_2_Base(object):
         return True
 
     def close_instrument(self, inst_nr: int) -> bool:
-        inst = self._inst_contexts[inst_nr]["inst"]
-        if inst is not None:
+        if self._inst_contexts[inst_nr]["inst"] is not None:
             if self._inst_contexts[inst_nr]["opened"]:
-                inst.close()
+                try:
+                    self._inst_contexts[inst_nr]["inst"].close()
+                except Exception as e:
+                    self.logger.warning(f"Error during closing instrument {inst_nr}: {e}")
+                    sleep(0.1)  # give it a moment to close
                 self._inst_contexts[inst_nr]["opened"] = False
                 self._inst_contexts[inst_nr]["inst"] = None
         return True
