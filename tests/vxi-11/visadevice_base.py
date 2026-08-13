@@ -46,7 +46,7 @@ class visadevice_base(object):
     def logger(self):
         return logging.getLogger(f"{self.__class__.__name__}")
     
-    def __init__(self, visa_provider: Optional[str], device_ip: str, inst_addresses: str, options: dict = {}):
+    def __init__(self, visa_provider: Optional[str], device_ip: str, inst_addresses: str, visa_type: str, port: int, options: dict = {}):
         """Initialize the VXI-11.2 base test case.
 
         :param visa_provider: The VISA provider to use ('py', 'ni', 'keysight', 'rs', or None).
@@ -59,6 +59,10 @@ class visadevice_base(object):
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
         :type inst_addresses: str
+        :param visa_type: The type of VISA connection (default is "gateway").
+        :type visa_type: str
+        :param port: The VISA port number (default is 0).
+        :type port: int
         :raises Exception: If the specified provider is not available on the current platform.
         :raises ValueError: If the instrument addresses are invalid.
         """
@@ -71,8 +75,8 @@ class visadevice_base(object):
             raise ValueError(f"Invalid instrument addresses: {inst_addresses}")
         self.options = options
         self._inst_contexts = {}
-        self.visa_type = "vxi11"
-        self.visa_port = 0
+        self.visa_type = visa_type
+        self.visa_port = port
         self.rm, self.visa_provider = self.get_resource_manager(visa_provider)
         self.logger.debug(f"Using VISA provider: {self.visa_provider}")
         self.prepare_instrument_context()

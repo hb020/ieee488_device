@@ -133,7 +133,7 @@ if __name__ == "__main__":
     for i, (tester, step, global_test_nr, local_test_nr) in enumerate(test_steps):
         if global_test_nr == test_to_run or test_to_run == 0:
             try:
-                t = tester(visa_provider, device_ip, addresses, options)
+                t = tester(visa_provider, device_ip, addresses, visa_type, port, options)
             except Exception as e:
                 logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
                 sys.exit(1) 
