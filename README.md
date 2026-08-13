@@ -51,19 +51,26 @@ Usage:
 
 ```text
 python3 run.py -h
-usage: run.py [-h] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}] [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [gateway_ip]
+usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}] [-cs]
+              [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+              [device_ip]
 
-Test VXI-11.2 gateway and devices
+Test VXI-11.2 gateways and other VISA devices
 
 positional arguments:
-  gateway_ip            The IP address of the gateway device to use for tests.
+  device_ip             The IP address of the gateway device to use for tests.
 
 options:
   -h, --help            show this help message and exit
+  -t, --type {vxi11,hislip,socket,gateway}
+                        The type of device to test. Default is gateway.
+  -p, --port PORT       The port to use for the device. Default is 0, which means the default port for the device type.
+                        MUST be specified and non-0 for socket type.
   -a, --addresses ADDRESSES
                         The addresses on the bus, separated by ';'.
                         Addresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.
-                        Examples: '1' or '1;2,0;2,1'
+                        Examples: '1' or '1;2,0;2,1'.
+                        Is ignored for socket type.
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
   -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}

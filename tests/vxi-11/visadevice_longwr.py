@@ -1,7 +1,7 @@
 import logging
 
-import vxi11_2_base
-from vxi11_2_helpers import ieee488_device_longwr_query
+import visadevice_base
+from visadevice_helpers import ieee488_device_longwr_query
 
 #region Logging setup
 # Configure logging, and set global log level (for pyvisa etc)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)
 #endregion  
 
-class VXI11_2_longwr(vxi11_2_base.VXI11_2_Base):
+class visadevice_longwr(visadevice_base.visadevice_base):
 #region overrides
     ###############################################################################################
     @classmethod

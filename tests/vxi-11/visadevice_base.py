@@ -34,7 +34,7 @@ logger.setLevel(LOG_LEVEL)
 #endregion  
 
 #region test base class
-class VXI11_2_Base(object):
+class visadevice_base(object):
     """
     Base class for VXI-11 tests.
     """
@@ -46,15 +46,15 @@ class VXI11_2_Base(object):
     def logger(self):
         return logging.getLogger(f"{self.__class__.__name__}")
     
-    def __init__(self, visa_provider: Optional[str], gateway_ip: str, inst_addresses: str, options: dict = {}):
+    def __init__(self, visa_provider: Optional[str], device_ip: str, inst_addresses: str, options: dict = {}):
         """Initialize the VXI-11.2 base test case.
 
         :param visa_provider: The VISA provider to use ('py', 'ni', 'keysight', 'rs', or None).
                           None, or any string other than the recognized providers,  ('py', 'ni', 'keysight', 'rs') 
                           all designate the system default provider.
         :type visa_provider: str, optional
-        :param gateway_ip: The IP address of the VXI-11.2 gateway
-        :type gateway_ip: str, optional
+        :param device_ip: The IP address of the VXI-11.2 gateway
+        :type device_ip: str, optional
         :param inst_addresses: A string specifying the instrument addresses, separated by ';'. 
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
@@ -65,13 +65,14 @@ class VXI11_2_Base(object):
         self.skipped = 0
         self.succeeded = 0
         self.failed = 0
-        self.gateway_ip = gateway_ip
+        self.device_ip = device_ip
         self.inst_addresses = self.validate_instrument_addresses(inst_addresses)
         if self.inst_addresses is None:
             raise ValueError(f"Invalid instrument addresses: {inst_addresses}")
-        self.visa_provider = visa_provider
         self.options = options
         self._inst_contexts = {}
+        self.visa_type = "vxi11"
+        self.visa_port = 0
         self.rm, self.visa_provider = self.get_resource_manager(visa_provider)
         self.logger.debug(f"Using VISA provider: {self.visa_provider}")
         self.prepare_instrument_context()
@@ -136,6 +137,43 @@ class VXI11_2_Base(object):
                 logger.error(f"Invalid instrument address format: {addr}")
                 return None
         return addresses
+    
+    @classmethod
+    def get_resourcename_for_instrument(cls, device_ip: str, visa_provider: str, addr: str, visa_type: str = "gateway", visa_port: int = 0) -> str:
+        """Get the VISA compatible resource name for the given instrument bus address.
+
+        :param device_ip: The IP address of the device
+        :type device_ip: str
+        :param visa_provider: The VISA provider name ('py', 'ni', 'keysight', 'rs', or None).
+        :type visa_provider: str
+        :param addr: The instrument bus address (may have secondary address, in the format "{primary},{secondary}").
+        :type addr: str
+        :param visa_type: The type of VISA connection (default is "gateway").
+        :type visa_type: str
+        :param visa_port: The VISA port number (default is 0).
+        :type visa_port: int
+        :return: The VISA compatible resource name
+        :rtype: str
+        """
+        
+        if visa_type == "socket":
+            return f"TCPIP::{device_ip}::{visa_port}::SOCKET"
+        if visa_type == "hislip":
+            if visa_port == 0:
+                return f"TCPIP::{device_ip}::hislip{addr}::INSTR"
+            else:
+                return f"TCPIP::{device_ip}::hislip{addr}::{visa_port}::INSTR"
+        if visa_type == "vxi11":
+            return f"TCPIP::{device_ip}::inst{addr}::INSTR"
+        if visa_type == "gateway":
+            if visa_provider == "rs":
+                # RS requires it to start with "inst". You can set the SICL in the gateway generally
+                # E5810 requires SICL in that case to be set to "inst0", making the GPIB device 5:1 to become inst0,5,1.
+                return f"TCPIP::{device_ip}::inst0,{addr}::INSTR"
+            else:
+                return f"TCPIP::{device_ip}::gpib0,{addr}::INSTR"
+        raise ValueError(f"Unknown visa_type: {visa_type}. Must be one of 'socket', 'hislip', 'vxi11', or 'gateway'.")
+    
     
     def close(self):
         """Close all opened instruments and the resource manager."""
@@ -215,24 +253,9 @@ class VXI11_2_Base(object):
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             self._inst_contexts[inst_nr]["address"] = addr
-            self._inst_contexts[inst_nr]["resource_name"] = self.get_resourcename_for_instrument(addr)
+            self._inst_contexts[inst_nr]["resource_name"] = self.get_resourcename_for_instrument(self.device_ip, self.visa_provider, addr, self.visa_type, self.visa_port)
             self._inst_contexts[inst_nr]["cmds_init"] = []
             
-    def get_resourcename_for_instrument(self, addr: str) -> str:
-        """Get the VXI-11.2 VISA compatible resource name for the given instrument bus address.
-
-        :param addr: The instrument bus address (may have secondary address, in the format "{primary},{secondary}").
-        :type addr: str
-        :return: The VXI-11.2 VISA compatible resource name
-        :rtype: str
-        """
-        if self.visa_provider == "rs":
-            # RS requires it to start with "inst". You can set the SICL in the gateway generally
-            # E5810 requires SICL in that case to be set to "inst0", making the GPIB device 5:1 to become inst0,5,1.
-            return f"TCPIP::{self.gateway_ip}::inst0,{addr}::INSTR"
-        else:
-            return f"TCPIP::{self.gateway_ip}::gpib0,{addr}::INSTR"
-     
     def open_instrument(self, inst_nr: int, testname: str, test: int) -> int:
         """Open the instrument with the given instrument number.
 

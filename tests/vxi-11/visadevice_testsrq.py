@@ -6,7 +6,7 @@ import pyvisa
 import pyvisa.constants
 import logging
 
-import vxi11_2_base
+import visadevice_base
 
 # Choose one of the 2
 # EVENT_MECH = pyvisa.constants.EventMechanism.queue
@@ -47,7 +47,7 @@ def handle_event(resource, event, srq_user_handle):
 
 
 
-class VXI11_2_testsrq(vxi11_2_base.VXI11_2_Base):
+class visadevice_testsrq(visadevice_base.visadevice_base):
 #region overrides
     ###############################################################################################
     @classmethod

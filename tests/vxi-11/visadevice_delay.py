@@ -1,9 +1,9 @@
 import logging
 import pyvisa
-from vxi11_2_helpers import ieee488_device_longrd_query, ieee488_device_longwr_query, str_diff
+from visadevice_helpers import ieee488_device_longrd_query, ieee488_device_longwr_query, str_diff
 import time
 
-import vxi11_2_base
+import visadevice_base
 
 #region Logging setup
 # Configure logging, and set global log level (for pyvisa etc)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)
 #endregion  
 
-class VXI11_2_delay(vxi11_2_base.VXI11_2_Base):
+class visadevice_delay(visadevice_base.visadevice_base):
 #region overrides
     ###############################################################################################
     @classmethod
