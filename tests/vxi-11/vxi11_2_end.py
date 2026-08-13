@@ -26,6 +26,28 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
     def testmethods(cls) -> list[str]:
         return ["End conditions: EOS", "End conditions: EOI", "End conditions: Count"]
 
+    def set_instrument_to_eos(self, inst, cmd_goto_eos):
+        if len(cmd_goto_eos) > 0:
+            inst.write(cmd_goto_eos)
+        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
+        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
+        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
+        try:
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SUPPRESS_END_EN, True)
+        except:
+            # some backends do not support this attribute, so ignore the error
+            pass
+
+    def set_instrument_to_eoi(self, inst, cmd_goto_eoi):
+        inst.write(cmd_goto_eoi)
+        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
+        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
+        try:                
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SUPPRESS_END_EN, False)
+        except:
+            # some backends do not support this attribute, so ignore the error
+            pass
+
     def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
         # Do the tests
 
@@ -70,31 +92,26 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         
         if test == 0:
             # EOS case
+            rv = True
             try:
-                if len(cmd_goto_eos) > 0:
-                    inst.write(cmd_goto_eos)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
+                self.set_instrument_to_eos(inst, cmd_goto_eos)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
                 expected = expected_reply + "\n"
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
-                    return False
-                inst.write(cmd_goto_eoi)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)                
+                    rv = False
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: EOS test raised an exception: {e}")
-                return False
+                rv = False
+                
+            self.set_instrument_to_eoi(inst, cmd_goto_eoi)
+            return rv
 
         if test == 1:
             # normal case (EOI)
             try:
-                inst.write(cmd_goto_eoi)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
+                self.set_instrument_to_eoi(inst, cmd_goto_eoi)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
                 expected = expected_reply
@@ -109,9 +126,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
             
         if test == 2:
             try:
-                inst.write(cmd_goto_eoi)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-                inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
+                self.set_instrument_to_eoi(inst, cmd_goto_eoi)    
                 # do it once to get the normal length
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii").rstrip() # remove the trailing newline, as the EOI case does not have a newline
@@ -136,12 +151,13 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
             finally:
                 inst.timeout = old_timeout
         
-        # The following are read/write attributes
+        # Attributes for Read and Write:
         # VI_ATTR_TERMCHAR_EN
         # VI_ATTR_TERMCHAR
-        # VI_ATTR_SEND_END_EN (not used by pyvisa-py, but used by NI-VISA)
+        # VI_ATTR_SEND_END_EN (not used by early pyvisa-py, but used by NI-VISA)
         
-        # VI_ATTR_SUPPRESS_END_EN is not valid for TCPIP INSTR resources (only Serial INSTR, TCPIP SOCKET, USB RAW, VXI INSTR)    
+        # Attributes for Read
+        # VI_ATTR_SUPPRESS_END_EN (not supported by early pyvisa-py nor early NI-Visa)
         
         return self.check_errors(inst_nr, context)
 
