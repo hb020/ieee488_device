@@ -76,12 +76,13 @@ if __name__ == "__main__":
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("device_ip", type=str, nargs="?", default=DEFAULT_IP, help="The IP address of the gateway device to use for tests.")
     parser.add_argument("-t", "--type", type=str, default=DEFAULT_TYPE, choices=["vxi11", "hislip", "socket", "gateway"], help=f"The type of device to test. Default is {DEFAULT_TYPE}.")
-    parser.add_argument("-p", "--port", type=int, default=0, help="The port to use for the device. Default is 0, which means the default port for the device type.\nMUST be specified and non-0 for socket type.")
+    parser.add_argument("-p", "--port", type=int, default=0, help="The port to use for the device. Default is 0, which means the default port for the device type.\n This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.")
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'.\nIs ignored for socket type.")
     parser.add_argument("-V", "--visa-provider", type=str, default=DEFAULT_PROVIDER, choices=visadevice_base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.")
     parser.add_argument("-T", "--test", type=int, default=DEFAULT_TEST, choices=range(0, len(test_steps)+1), help=test_names)
     parser.add_argument("-cs", "--auto-chunk-size", action="store_true", help="Enable automatic chunk size correction, needed with some gateways for the long reads/writes.")
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
+    parser.add_argument("--discover", action="store_true", help="Discover the VISA devices auto discoverable by this system, and exit.\nIf provided, this uses the log level setting and the visa provider setting when discovering.")
     
     options = {}
     args = parser.parse_args()
@@ -98,26 +99,42 @@ if __name__ == "__main__":
     # The files themselves also have loggers for various stuff.
     for logger_name in logger_names:
         logging.getLogger(logger_name).setLevel(log_level)
+        
+    visa_provider = args.visa_provider
+    if len(visa_provider) == 0:
+        visa_provider = None
+        
+    if args.discover:
+        logger.info(f"Discovering VISA devices using provider {visa_provider if visa_provider else 'default'}...")
+        try:
+            t = visadevice_base(visa_provider, "127.0.0.1", "0", "gateway", 0, {})
+        except Exception as e:
+            logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
+            sys.exit(1) 
+        
+        devices = t.discover_visa_devices()
+        if len(devices) == 0:
+            logger.info("No VISA devices found.")
+        else:
+            print(f"Found {len(devices)} VISA devices:")
+            for device in devices:
+                print(f"  {device}")
+        sys.exit(0)
+        
     options["auto_chunk_size"] = args.auto_chunk_size
-    
+        
     addresses = args.addresses
     
     test_to_run = args.test
     device_ip = args.device_ip
     visa_type = args.type
-    if visa_type == "socket" and args.port == 0:
-        logger.error(f"Socket type requires a non-zero port number, but got {args.port}")
-        sys.exit(1)
     port = args.port    
-    visa_provider = args.visa_provider
-    if len(visa_provider) == 0:
-        visa_provider = None
     if visa_type == "socket":
         addresses = "0"  # socket type does not use addresses, but we need to pass something to the test classes.
     
     if isinstance(addresses, int):
         addresses = str(addresses)
-    address_list = visadevice_base.validate_instrument_addresses(addresses)
+    address_list = visadevice_base.validate_instrument_addresses(addresses, visa_type)
     if address_list is None:
         logger.error(f"Invalid instrument addresses: {addresses}")
         sys.exit(1)

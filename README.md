@@ -27,7 +27,7 @@ And after slight modification (that means: deactivation  of the test device code
 
 ## Test tools
 
-In `/tests/vxi-11`, there is a test suite (that can be used from automated test tools) for testing a wide range of things regarding VXI-11.2 communication. (With a little bit of work, it can also be used on standalone VXI-11 devices.)
+In `/tests/vxi-11`, there is a test suite (that can be used from automated test tools) for testing a wide range of things regarding VXI-11.2, VXI-11, Hislip and raw socket VISA communication.
 
 It allows testing of:
 
@@ -37,6 +37,7 @@ It allows testing of:
 - End conditions: Count
 - SRQ: individual, early enable
 - SRQ: individual, late enable
+- SRQ: individual, repeated
 - SRQ: single emitter, multiple listener
 - SRQ: multiple emitters, single listener
 - Long read
@@ -45,7 +46,7 @@ It allows testing of:
 - Delay: in reading
 - Delay: in reply
 
-It can be used on any VXI-11.2 compatible gateway, on a range of IVI backends, and supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device. Especially the EOS to EOI switching is something that is not easily found elsewhere.
+It can be used on any VXI-11.2 compatible gateway, and on hislip, VXI-11 and Socket VISA devices, on a range of IVI backends. It supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device, via a gateway. Especially the EOS to EOI switching is something that is not easily found elsewhere.
 
 Usage:
 

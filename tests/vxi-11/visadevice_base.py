@@ -70,7 +70,7 @@ class visadevice_base(object):
         self.succeeded = 0
         self.failed = 0
         self.device_ip = device_ip
-        self.inst_addresses = self.validate_instrument_addresses(inst_addresses)
+        self.inst_addresses = self.validate_instrument_addresses(inst_addresses, visa_type)
         if self.inst_addresses is None:
             raise ValueError(f"Invalid instrument addresses: {inst_addresses}")
         self.options = options
@@ -106,13 +106,15 @@ class visadevice_base(object):
         return RESOURCE_MANAGERS
 
     @classmethod
-    def validate_instrument_addresses(cls,inst_addresses: str) -> list[str] | None:
+    def validate_instrument_addresses(cls,inst_addresses: str, visa_type: str = "gateway") -> list[str] | None:
         """Validate the format of the instrument addresses string.
 
         :param inst_addresses: A string specifying the instrument addresses, separated by ';'. 
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
         :type inst_addresses: str
+        :param visa_type: The type of VISA connection (default is "gateway").
+        :type visa_type: str
         :return: The list of addresses if the format is valid, None otherwise.
         :rtype: list[str] | None
         """
@@ -133,6 +135,9 @@ class visadevice_base(object):
                     logger.error(f"Invalid primary address: {primary}")
                     return None
                 if len(parts) == 2:
+                    if visa_type != "gateway":
+                        logger.error(f"Secondary addresses are only supported for gateway visa_type, not on {visa_type}. Offending address: {addr}")
+                        return None
                     secondary = int(parts[1])
                     if secondary < 0 or secondary > 30:
                         logger.error(f"Invalid secondary address: {secondary}")
@@ -161,12 +166,14 @@ class visadevice_base(object):
         """
         
         if visa_type == "socket":
+            if visa_port == 0:
+                visa_port = 5025  # default port for socket type
             return f"TCPIP::{device_ip}::{visa_port}::SOCKET"
         if visa_type == "hislip":
             if visa_port == 0:
                 return f"TCPIP::{device_ip}::hislip{addr}::INSTR"
             else:
-                return f"TCPIP::{device_ip}::hislip{addr}::{visa_port}::INSTR"
+                return f"TCPIP::{device_ip}::hislip{addr},{visa_port}::INSTR"
         if visa_type == "vxi11":
             return f"TCPIP::{device_ip}::inst{addr}::INSTR"
         if visa_type == "gateway":
@@ -178,6 +185,21 @@ class visadevice_base(object):
                 return f"TCPIP::{device_ip}::gpib0,{addr}::INSTR"
         raise ValueError(f"Unknown visa_type: {visa_type}. Must be one of 'socket', 'hislip', 'vxi11', or 'gateway'.")
     
+    def discover_visa_devices(self) -> list[str]:
+        """Discover the VISA TCPIP devices auto discoverable by this system.
+
+        :return: A list of discovered VISA TCPIP resource names.
+        :rtype: list[str]
+        """
+        if not hasattr(self, 'rm') or self.rm is None:
+            self.logger.error("Resource manager is not initialized")
+            return []
+        try:
+            resources = self.rm.list_resources()
+            return [resource for resource in resources if str(resource).startswith("TCPIP")]
+        except Exception as e:
+            self.logger.error(f"Failed to discover VISA resources: {e}")
+            return []
     
     def close(self):
         """Close all opened instruments and the resource manager."""
@@ -286,9 +308,15 @@ class visadevice_base(object):
         if inst is None or not (
                 isinstance(inst, pyvisa.resources.TCPIPInstrument) or 
                 isinstance(inst, pyvisa.resources.GPIBInstrument) or
-                isinstance(inst, pyvisa.resources.USBInstrument)):
-            self.logger.error(f"{testname}: Failed to open {resource_name}")
+                isinstance(inst, pyvisa.resources.USBInstrument) or
+                isinstance(inst, pyvisa.resources.TCPIPSocket)):
+            self.logger.error(f"{testname}: Failed to open {resource_name}, I do not support this type of instrument: {type(inst)}")
             return 1
+        
+        if isinstance(inst, pyvisa.resources.TCPIPSocket):
+            # For socket type, we need to set the termination characters and the read_termination
+            inst.read_termination = '\n'
+            inst.write_termination = '\n'
 
         try:
             idn = inst.query("*IDN?").strip()

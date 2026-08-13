@@ -97,6 +97,15 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         cmds_srq_provoke = ""  # mandatory, must be set for instruments that support SRQ, otherwise the test will be skipped for that instrument
         cmds_srq_disable = []
         cmds_clear = ["*CLS"]
+        if self.visa_type in ["socket"]:
+            # cannot do SRQ stuff over socket
+            return {}
+        if test == 1:
+            # late enable is not supported on VXI11 or Hislip, so skip this test for those instruments
+            if self.visa_type in ["vxi11", "hislip"]:
+                # cannot do SRQ stuff over VXI11 or Hislip
+                return {}
+        
         if "STMEthernet2GPIB" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
             cmds_srq_enable = ["*ESE 254", "*SRE 4"]

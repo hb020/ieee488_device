@@ -99,8 +99,9 @@ class visadevice_end(visadevice_base.visadevice_base):
                 r = inst.read_raw().decode("ascii")
                 expected = expected_reply + "\n"
                 if r != expected:
-                    self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
-                    rv = False
+                    if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
+                        self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
+                        rv = False
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: EOS test raised an exception: {e}")
                 rv = False
@@ -114,11 +115,11 @@ class visadevice_end(visadevice_base.visadevice_base):
                 self.set_instrument_to_eoi(inst, cmd_goto_eoi)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
-                expected = expected_reply
                 r = r.rstrip() # remove the trailing newline, as the EOI case does not have a newline
-                if r != expected:
-                    self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected}\", got \"{r}\"")
-                    return False          
+                if r != expected_reply:
+                    if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
+                        self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
+                        return False          
                 
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: EOI test raised an exception: {e}")
@@ -131,9 +132,17 @@ class visadevice_end(visadevice_base.visadevice_base):
                 # do it once to get the normal length
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii").rstrip() # remove the trailing newline, as the EOI case does not have a newline
+                if r != expected_reply:
+                    if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
+                        self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
+                        return False
+                # now force the expecte dto be what I just read, in case the real reply is longer
+                expected_reply = r
                 # now ask the same, just with a smaller length
                 inst.write(cmd_test)
                 take_off = min(5, len(r)-1) # take off at most 5 characters, and leave at least 1. If I make it 0, pyvisa will request all.
+                expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
+                self.logger.debug(f"instrument nr {inst_nr}: length test: reading {len(r)-take_off} characters, expected reply: \"{expected}\"")
                 r = inst.read_bytes(len(r)-take_off).decode("ascii") # read less characters than the previous read, to test that the read stops at count
                 expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
                 if r != expected:
@@ -170,7 +179,7 @@ class visadevice_end(visadevice_base.visadevice_base):
         cmd_goto_eos = ""  # leave empty for instruments that do not support EOS, so that the test will be skipped for those instruments
         cmd_goto_eoi = ""  # may be empty. EOI tests will always be done.
         cmd_test = ""
-        expected_reply = ""
+        expected_reply = ""  # can be shorter than the real reply, in which case the test will check that the reply starts with the expected reply and ends with a comma, to indicate that the reply is longer than the expected reply.
         if "ieee488_device" in idn:
             cmd_goto_eos = "EOS 10"
             cmd_goto_eoi = "EOS"
@@ -196,6 +205,16 @@ class visadevice_end(visadevice_base.visadevice_base):
             cmd_goto_eoi = ""
             cmd_test = "*ID?"
             expected_reply = "HP8594E"
+        if "34465A" in idn:
+            cmd_goto_eos = "*CLS"
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            expected_reply = "Keysight Technologies,34465A,"
+        if "DMM6500" in idn:
+            cmd_goto_eos = "*CLS"
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            expected_reply = "KEITHLEY INSTRUMENTS,MODEL DMM6500,"
         if test == 0 and (len(cmd_test) == 0 or len(cmd_goto_eos) == 0):
             # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for EOS test")
             return {}
