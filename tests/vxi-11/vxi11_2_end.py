@@ -1,6 +1,7 @@
 import logging
 import pyvisa
 import pyvisa.constants
+from vxi11_2_helpers import ieee488_device_longrd_query, str_diff
 
 import vxi11_2_base
 
@@ -32,7 +33,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         cmd_goto_eos = context["cmd_goto_eos"]
         cmd_goto_eoi = context["cmd_goto_eoi"]
         cmd_test = context["cmd_test"]
-        cmd_expected_reply = context["cmd_expected_reply"]
+        expected_reply = context["expected_reply"]
         
         
         # - write from client to device:
@@ -77,7 +78,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                 inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
-                expected = cmd_expected_reply + "\n"
+                expected = expected_reply + "\n"
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
                     return False
@@ -96,7 +97,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                 inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
-                expected = cmd_expected_reply
+                expected = expected_reply
                 r = r.rstrip() # remove the trailing newline, as the EOI case does not have a newline
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected}\", got \"{r}\"")
@@ -117,7 +118,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                 # now ask the same, just with a smaller length
                 inst.write(cmd_test)                                
                 r = inst.read_bytes(len(r)-5).decode("ascii") # read one less character than the previous read, to test that the read stops at EOI
-                expected = cmd_expected_reply[:-5] # remove the last 5 characters from the expected reply, to match the read length
+                expected = expected_reply[:-5] # remove the last 5 characters from the expected reply, to match the read length
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: length test failed: expected \"{expected}\", got \"{r}\"")
                     return False
@@ -150,32 +151,32 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         cmd_goto_eos = ""  # leave empty for instruments that do not support EOS, so that the test will be skipped for those instruments
         cmd_goto_eoi = ""  # may be empty. EOI tests will always be done.
         cmd_test = ""
-        cmd_expected_reply = ""
+        expected_reply = ""
         if "ieee488_device" in idn:
             cmd_goto_eos = "EOS 10"
             cmd_goto_eoi = "EOS"
-            cmd_test = "LONGRD? 10"
-            cmd_expected_reply = "0123456789"
+            expected_len = 2000
+            cmd_test, expected_reply = ieee488_device_longrd_query(expected_len)
         if "IDN-SGLT-PRI" in idn: # dummy device tests
             cmd_goto_eos = ""
             cmd_goto_eoi = ""
             cmd_test = "*IDN?"
-            cmd_expected_reply = "IDN-SGLT-PRI SDG0000X"
+            expected_reply = "IDN-SGLT-PRI SDG0000X"
         if "66332A" in idn:
             cmd_goto_eos = ""
             cmd_goto_eoi = ""
             cmd_test = "*IDN?"
-            cmd_expected_reply = "HEWLETT-PACKARD,66332A,0,A.01.03"
+            expected_reply = "HEWLETT-PACKARD,66332A,0,A.01.03"
         if "6634B" in idn:
             cmd_goto_eos = ""
             cmd_goto_eoi = ""
             cmd_test = "*IDN?"
-            cmd_expected_reply = "HEWLETT-PACKARD,6634B,0,A.01.04"
+            expected_reply = "HEWLETT-PACKARD,6634B,0,A.01.04"
         if "HP859" in idn:
             cmd_goto_eos = ""
             cmd_goto_eoi = ""
             cmd_test = "*ID?"
-            cmd_expected_reply = "HP8594E"
+            expected_reply = "HP8594E"
         if test == 0 and (len(cmd_test) == 0 or len(cmd_goto_eos) == 0):
             # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for EOS test")
             return {}
@@ -187,7 +188,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                     "cmd_goto_eos": cmd_goto_eos, 
                     "cmd_goto_eoi": cmd_goto_eoi, 
                     "cmd_test": cmd_test, 
-                    "cmd_expected_reply": cmd_expected_reply
+                    "expected_reply": expected_reply
                     })
         return ret
     

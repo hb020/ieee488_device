@@ -1,6 +1,7 @@
 import logging
 
 import vxi11_2_base
+from vxi11_2_helpers import ieee488_device_longrd_query, str_diff
 
 #region Logging setup
 # Configure logging, and set global log level (for pyvisa etc)
@@ -27,11 +28,12 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         # Do the tests
         cmd_read = context["cmd_read"]
         check_function = context["check_function"]
-        check_len = context["check_len"]        
+        check_len = context["check_len"]
+        expected_reply = context.get("expected_reply", "")
         
         self.logger.debug(f"{testname}: instrument nr {inst_nr}: sending command: {cmd_read}")
         if check_function is not None:
-            if not check_function(inst_nr, context, cmd_read, check_len):
+            if not check_function(inst_nr, context, cmd_read, check_len, expected_reply):
                 self.logger.error(f"{testname}: instrument nr {inst_nr}: reply check failed for command: {cmd_read}")
                 return False
         else:
@@ -43,8 +45,9 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         ret = super().get_instrument_commands(inst_nr, idn, test) 
         cmds_init = ret["cmds_init"][:]  # make a copy of the list, so that I only overwrite the commands I want to change, and keep the rest of the commands from the base class
         cmd_read = ""
-        check_function = None
-        check_len = 0
+        check_function = None  # mandatory
+        check_len = 0          # only needed when the check_function needs it.
+        expected_reply = ""    # only needed when the check_function needs it.
         if "66332A" in idn:
             datalen = 800
             cmds_init = ["*CLS", "INIT:CONT:SEQ OFF", "SENS:FUNC \"VOLT\"", "TRIG:ACQ:SOUR BUS", "SENS:SWE:TINT 15.6E-6", f"SENSE:SWEEP:POINTS {datalen}"]
@@ -57,7 +60,7 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
             check_len = 0           
         if "ieee488_device" in idn:
             datalen = 500000
-            cmd_read = f"LONGRD? {datalen}"
+            cmd_read, expected_reply = ieee488_device_longrd_query(datalen)
             check_function = self.check_ieee488_device
             check_len = datalen
 
@@ -65,7 +68,7 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
             # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for long read test")
             return {}
         
-        ret.update({"cmds_init": cmds_init, "cmd_read": cmd_read, "check_function": check_function, "check_len": check_len})
+        ret.update({"cmds_init": cmds_init, "cmd_read": cmd_read, "check_function": check_function, "check_len": check_len, "expected_reply": expected_reply})
         return ret
     
 #endregion
@@ -76,7 +79,7 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
 #region the tests
     ###############################################################################################
     
-    def check_66332A(self, inst_nr: int, context: dict, cmd_read: str, expected_len: int) -> bool:
+    def check_66332A(self, inst_nr: int, context: dict, cmd_read: str, expected_len: int, expected_reply: str) -> bool:
         """Check the 66332A instrument.
 
         :param inst_nr: The instrument number
@@ -87,6 +90,8 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         :type cmd_read: str
         :param expected_len: The expected length of the reply
         :type expected_len: int
+        :param expected_reply: The expected reply from the instrument
+        :type expected_reply: str
         :return: True if the reply is valid, False otherwise
         :rtype: bool
         """
@@ -103,7 +108,7 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
             self.logger.error(f"Failed to parse reply: {e}")
             return False
         
-    def check_ieee488_device(self, inst_nr: int, context: dict, cmd_read: str, expected_len: int) -> bool:
+    def check_ieee488_device(self, inst_nr: int, context: dict, cmd_read: str, expected_len: int, expected_reply: str) -> bool:
         """Check the ieee488_device instrument.
         
         :param inst_nr: The instrument number
@@ -114,8 +119,10 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         :type cmd_read: str
         :param expected_len: The expected length of the reply
         :type expected_len: int
+        :param expected_reply: The expected reply from the instrument
+        :type expected_reply: str
         :return: True if the reply is valid, False otherwise
-        :rtype: bool        
+        :rtype: bool
         """
         # The reply should be a custom sequential list of length expected_len
         inst = context["inst"]
@@ -123,6 +130,7 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         # else: 140us per character on a atmega4809, with overhead
         # timeout is in ms
         inst.timeout = expected_len * 0.2  # non-debug mode
+        expected_len = len(expected_reply)
         if self.options.get("auto_chunk_size", False):
             if expected_len > 20000:
                 inst.chunk_size = expected_len + 1000  # increase chunk size for large reads
@@ -137,29 +145,15 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
             if len(reply) != expected_len:
                 self.logger.error(f"Reply length {len(reply)} does not match expected length {expected_len}")
                 return False
-            if not reply.startswith("0"):
-                self.logger.error(f"Reply does not start with '0': {reply}")
+            if reply != expected_reply:
+                self.logger.error(f"Reply does not match expected reply. {str_diff(expected_reply, reply)}")
                 return False
-            
-            # now check sequentiality
-            for i in range(1, len(reply)):
-                if (ord(reply[i]) < 0x30) or (ord(reply[i]) > 0x7E):
-                    self.logger.error(f"Reply contains non-printable characters at index {i}: {reply[i]}")
-                    return False
-                if (ord(reply[i]) == 0x30):
-                    if (ord(reply[i-1]) != 0x7E):
-                        self.logger.error(f"Reply is not sequential at index {i}: {reply[i-1]} -> {reply[i]}")
-                        return False
-                else:
-                    if ord(reply[i]) != (ord(reply[i-1]) + 1):
-                        self.logger.error(f"Reply is not sequential at index {i}: {reply[i-1]} -> {reply[i]}")
-                        return False
             return True
         except ValueError as e:
             self.logger.error(f"Failed to parse reply: {e}")
             return False
     
-    def check_hp8590(self, inst_nr: int, context: dict, cmd_read: str, expected_len: int) -> bool:
+    def check_hp8590(self, inst_nr: int, context: dict, cmd_read: str, expected_len: int, expected_reply: str) -> bool:
         """Check the HP8590 instrument.
         
         :param inst_nr: The instrument number
@@ -170,6 +164,8 @@ class VXI11_2_longrd(vxi11_2_base.VXI11_2_Base):
         :type cmd_read: str
         :param expected_len: The expected length of the reply
         :type expected_len: int
+        :param expected_reply: The expected reply from the instrument
+        :type expected_reply: str
         :return: True if the reply is valid, False otherwise
         :rtype: bool
         """

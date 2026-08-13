@@ -1,6 +1,6 @@
 import logging
 import pyvisa
-import pyvisa.constants
+from vxi11_2_helpers import ieee488_device_longrd_query, ieee488_device_longwr_query, str_diff
 import time
 
 import vxi11_2_base
@@ -98,46 +98,30 @@ class VXI11_2_delay(vxi11_2_base.VXI11_2_Base):
         if "ieee488_device" in idn:
             if test == 0:
                 # write test
-                nr_of_bytes = 1000
+                nr_of_bytes = 2000
                 inter_char_delay_ms = 5
                 delay_time_ms = nr_of_bytes * max(0.05, inter_char_delay_ms)  # delay time is the time it takes to send the data, but at least 50us per character
                 cmd_setup = f"SLOWWR {inter_char_delay_ms}"
-                cmd_test = "LONGWR? "
-                expected_len = nr_of_bytes - len(cmd_test) - 2
+                expected_len = nr_of_bytes - len("LONGWR? ") - 2
                 if (expected_len <= 0):
                     self.logger.error(f"instrument nr {inst_nr}: expected length for write test is too small: {expected_len}")
                     return {}
-                data = "".join(chr(0x30 + (i % (0x7E - 0x30 + 1))) for i in range(expected_len))
-                if len(data) != expected_len:
-                    self.logger.error(f"Failed to create data of length {expected_len}, got length {len(data)}")
-                    return {}
-                cmd_test = cmd_test + data
-                expected_reply = f"{expected_len},48,\"\""
+                cmd_test, expected_reply = ieee488_device_longwr_query(expected_len)
             if test == 1:
                 # read test
-                nr_of_bytes = 1000
+                nr_of_bytes = 2000
                 inter_char_delay_ms = 5
                 delay_time_ms = nr_of_bytes * max(0.05, inter_char_delay_ms)  # delay time is the time it takes to send the data, but at least 50us per character
                 cmd_setup = f"SLOWRD {inter_char_delay_ms}"
                 expected_len = nr_of_bytes - 2
-                cmd_test = f"LONGRD? {expected_len}"
-                data = "".join(chr(0x30 + (i % (0x7E - 0x30 + 1))) for i in range(expected_len))
-                if len(data) != expected_len:
-                    self.logger.error(f"Failed to create data of length {expected_len}, got length {len(data)}")
-                    return {}
-                expected_reply = data
+                cmd_test, expected_reply = ieee488_device_longrd_query(expected_len)
             if test == 2:
                 # reply test
-                nr_of_bytes = 1000
+                nr_of_bytes = 2000
                 delay_time_ms =5000
                 cmd_setup = f"DELAYRD {delay_time_ms - (nr_of_bytes * 0.05) - 80}"  # delay time reply delay + the time it takes to send the data (at least 100us per character)
                 expected_len = nr_of_bytes - 2
-                cmd_test = f"LONGRD? {expected_len}"
-                data = "".join(chr(0x30 + (i % (0x7E - 0x30 + 1))) for i in range(expected_len))
-                if len(data) != expected_len:
-                    self.logger.error(f"Failed to create data of length {expected_len}, got length {len(data)}")
-                    return {}
-                expected_reply = data
+                cmd_test, expected_reply = ieee488_device_longrd_query(expected_len)
         if len(cmd_test) == 0:
             # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for end condition tests")
             return {}
