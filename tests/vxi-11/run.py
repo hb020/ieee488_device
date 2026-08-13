@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Test VXI-11.2 gateways and other VISA devices",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("device_ip", type=str, nargs="?", default=DEFAULT_IP, help="The IP address of the gateway device to use for tests.")
+    parser.add_argument("device_ip", type=str, nargs="?", default=DEFAULT_IP, help="The IP address of the device to use for tests.")
     parser.add_argument("-t", "--type", type=str, default=DEFAULT_TYPE, choices=["vxi11", "hislip", "socket", "gateway"], help=f"The type of device to test. Default is {DEFAULT_TYPE}.")
     parser.add_argument("-p", "--port", type=int, default=0, help="The port to use for the device. Default is 0, which means the default port for the device type.\n This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.")
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'.\nIs ignored for socket type.")

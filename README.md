@@ -59,7 +59,7 @@ usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [
 Test VXI-11.2 gateways and other VISA devices
 
 positional arguments:
-  device_ip             The IP address of the gateway device to use for tests.
+  device_ip             The IP address of the device to use for tests.
 
 options:
   -h, --help            show this help message and exit
