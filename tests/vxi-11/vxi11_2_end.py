@@ -160,7 +160,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         # VI_ATTR_SEND_END_EN (not used by early pyvisa-py, but used by NI-VISA)
         
         # Attributes for Read
-        # VI_ATTR_SUPPRESS_END_EN (not supported by early pyvisa-py nor early NI-Visa)
+        # VI_ATTR_SUPPRESS_END_EN (not supported by early pyvisa-py, not supported by NI-Visa on VXI-11, but supported on other types)
         
         return self.check_errors(inst_nr, context)
 
