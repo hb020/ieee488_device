@@ -125,32 +125,35 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
                 return False
             
         if test == 2:
+            rv = True
             try:
                 self.set_instrument_to_eoi(inst, cmd_goto_eoi)    
                 # do it once to get the normal length
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii").rstrip() # remove the trailing newline, as the EOI case does not have a newline
                 # now ask the same, just with a smaller length
-                inst.write(cmd_test)                                
-                r = inst.read_bytes(len(r)-5).decode("ascii") # read one less character than the previous read, to test that the read stops at EOI
-                expected = expected_reply[:-5] # remove the last 5 characters from the expected reply, to match the read length
+                inst.write(cmd_test)
+                take_off = min(5, len(r)-1) # take off at most 5 characters, and leave at least 1. If I make it 0, pyvisa will request all.
+                r = inst.read_bytes(len(r)-take_off).decode("ascii") # read less characters than the previous read, to test that the read stops at count
+                expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
                 if r != expected:
                     self.logger.error(f"instrument nr {inst_nr}: length test failed: expected \"{expected}\", got \"{r}\"")
-                    return False
+                    rv = False
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: length test raised an exception: {e}")
-                return False
+                rv = False
 
             old_timeout = inst.timeout
             try:
+                # flush out the remaining characters, so that the next test can start with a clean buffer
                 inst.timeout = 100 # set a short timeout to test that the read stops at EOI
                 inst.read_raw()
             except Exception as e:
                 self.logger.error(f"instrument nr {inst_nr}: flush raised an exception: {e}")
-                return False
+                rv = False
             finally:
                 inst.timeout = old_timeout
-        
+            return rv
         # Attributes for Read and Write:
         # VI_ATTR_TERMCHAR_EN
         # VI_ATTR_TERMCHAR
@@ -171,7 +174,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         if "ieee488_device" in idn:
             cmd_goto_eos = "EOS 10"
             cmd_goto_eoi = "EOS"
-            expected_len = 2000
+            expected_len = 0
             cmd_test, expected_reply = ieee488_device_longrd_query(expected_len)
         if "IDN-SGLT-PRI" in idn: # dummy device tests
             cmd_goto_eos = ""
