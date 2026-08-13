@@ -174,7 +174,7 @@ class VXI11_2_end(vxi11_2_base.VXI11_2_Base):
         if "ieee488_device" in idn:
             cmd_goto_eos = "EOS 10"
             cmd_goto_eoi = "EOS"
-            expected_len = 0
+            expected_len = 2000
             cmd_test, expected_reply = ieee488_device_longrd_query(expected_len)
         if "IDN-SGLT-PRI" in idn: # dummy device tests
             cmd_goto_eos = ""
