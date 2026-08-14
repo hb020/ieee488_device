@@ -140,7 +140,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         if "DMM6500" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*RST", "SYST:CLE", "STAT:CLE"]
             cmds_srq_enable = ["*SRE 36"]
-            cmds_srq_provoke = "bla"
+            cmds_srq_provoke = "MAKEERROR"
             cmds_srq_disable = ["*SRE 0"]
         if "HP859" in idn:
             cmds_init = ["CLS", "CMDERRQ?", "RQS 0"]

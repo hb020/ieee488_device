@@ -96,6 +96,10 @@ if __name__ == "__main__":
         logging.getLogger(f"{tester.__name__}").setLevel(log_level)
         
     logging.getLogger("pyvisa").setLevel(log_level)
+    try:
+        logging.getLogger("pyvisa-py").setLevel(log_level)
+    except Exception as e:
+        pass
     # The files themselves also have loggers for various stuff.
     for logger_name in logger_names:
         logging.getLogger(logger_name).setLevel(log_level)
