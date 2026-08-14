@@ -24,7 +24,7 @@ class visadevice_end(visadevice_base.visadevice_base):
     ###############################################################################################
     @classmethod
     def testmethods(cls) -> list[str]:
-        return ["End conditions: EOS", "End conditions: EOI", "End conditions: Count"]
+        return ["End conditions: EOS", "End conditions: EOI", "End conditions: Count", "End conditions: Chunk size"]
 
     def set_instrument_to_eos(self, inst, cmd_goto_eos):
         if len(cmd_goto_eos) > 0:
@@ -104,17 +104,17 @@ class visadevice_end(visadevice_base.visadevice_base):
                 status = inst.last_status
                 if status != pyvisa.constants.VI_SUCCESS_TERM_CHAR:
                     if status != pyvisa.constants.VI_SUCCESS:
-                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOS test failed: expected VI_SUCCESS_TERM_CHAR, got {status}")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: expected VI_SUCCESS_TERM_CHAR, got {status}")
                         return False
                     else:
-                        self.logger.warning(f"{testname} instrument nr {inst_nr}: EOS test: expected VI_SUCCESS_TERM_CHAR, got VI_SUCCESS. This may be a backend that does not support the EOS attribute reporting, or the device may not support EOS.")
+                        self.logger.warning(f"{testname} instrument nr {inst_nr}: expected VI_SUCCESS_TERM_CHAR, got VI_SUCCESS. This may be a backend that does not support the EOS attribute reporting, or the device may not support EOS.")
                 expected = expected_reply + "\n"
                 if r != expected:
                     if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
-                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: expected \"{expected}\", got \"{r}\"")
                         rv = False
             except Exception as e:
-                self.logger.error(f"{testname} instrument nr {inst_nr}: EOS test raised an exception: {e}")
+                self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
                 rv = False
                 
             self.set_instrument_to_eoi(inst, cmd_goto_eoi)
@@ -129,21 +129,64 @@ class visadevice_end(visadevice_base.visadevice_base):
                 status = inst.last_status
                 if status != pyvisa.constants.VI_SUCCESS:
                     if status == pyvisa.constants.VI_SUCCESS_TERM_CHAR:
-                        self.logger.warning(f"{testname} instrument nr {inst_nr}: EOI test: expected VI_SUCCESS, got VI_SUCCESS_TERM_CHAR. This may be a backend that does not support the EOI attribute reporting, or the device may not support EOI.")
+                        self.logger.warning(f"{testname} instrument nr {inst_nr}: expected VI_SUCCESS, got VI_SUCCESS_TERM_CHAR. This may be a backend that does not support the EOI attribute reporting, or the device may not support EOI.")
                     else:
-                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected VI_SUCCESS, got {status}")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: expected VI_SUCCESS, got {status}")
                         return False
                 r = r.rstrip() # remove the trailing newline, as the EOI case does not have a newline
                 if r != expected_reply:
                     if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
-                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: expected \"{expected_reply}\", got \"{r}\"")
                         return False          
                 
             except Exception as e:
-                self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test raised an exception: {e}")
+                self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
                 return False
             
         if test == 2:
+            rv = True
+            try:
+                self.set_instrument_to_eoi(inst, cmd_goto_eoi)    
+                # do it once to get the normal length
+                inst.write(cmd_test)
+                r = inst.read_raw().decode("ascii").rstrip() # remove the trailing newline, as the EOI case does not have a newline
+                if r != expected_reply:
+                    if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: expected \"{expected_reply}\", got \"{r}\"")
+                        return False
+                # now force the expected to be what I just read, in case the real reply is longer
+                expected_reply = r
+                # now ask the same, just with a smaller length
+                inst.write(cmd_test)
+                take_off = min(5, len(r)-1) # take off at most 5 characters, and leave at least 1. If I make it 0, pyvisa will request all.
+                expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
+                self.logger.debug(f"{testname} instrument nr {inst_nr}: reading {len(r)-take_off} characters, expected reply: \"{expected}\"")
+                r = inst.read_bytes(len(r)-take_off).decode("ascii") # read less characters than the previous read, to test that the read stops at count
+                status = inst.last_status
+                if status != pyvisa.constants.VI_SUCCESS_MAX_CNT:
+                    self.logger.error(f"{testname} instrument nr {inst_nr}: expected VI_SUCCESS_MAX_CNT, got {status}")
+                    return False                
+                expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
+                if r != expected:
+                    self.logger.error(f"{testname} instrument nr {inst_nr}: expected \"{expected}\", got \"{r}\"")
+                    rv = False
+            except Exception as e:
+                self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
+                rv = False
+                
+            old_timeout = inst.timeout
+            try:
+                # flush out the remaining characters, so that the next test can start with a clean buffer
+                inst.timeout = 100 # set a short timeout to test that the read stops at EOI
+                inst.read_raw()
+            except Exception as e:
+                self.logger.error(f"{testname} instrument nr {inst_nr}: flush raised an exception: {e}")
+                rv = False
+            finally:
+                inst.timeout = old_timeout
+            return rv                
+                
+        if test == 3:
             rv = True
             try:
                 self.set_instrument_to_eoi(inst, cmd_goto_eoi)    
@@ -156,35 +199,28 @@ class visadevice_end(visadevice_base.visadevice_base):
                         return False
                 # now force the expecte dto be what I just read, in case the real reply is longer
                 expected_reply = r
-                # now ask the same, just with a smaller length
-                inst.write(cmd_test)
-                take_off = min(5, len(r)-1) # take off at most 5 characters, and leave at least 1. If I make it 0, pyvisa will request all.
-                expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
-                self.logger.debug(f"{testname} instrument nr {inst_nr}: length test: reading {len(r)-take_off} characters, expected reply: \"{expected}\"")
-                r = inst.read_bytes(len(r)-take_off).decode("ascii") # read less characters than the previous read, to test that the read stops at count
-                status = inst.last_status
-                if status != pyvisa.constants.VI_SUCCESS_MAX_CNT:
-                    self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected VI_SUCCESS_MAX_CNT, got {status}")
-                    return False                
-                expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
-                if r != expected:
-                    self.logger.error(f"{testname} instrument nr {inst_nr}: length test failed: expected \"{expected}\", got \"{r}\"")
-                    rv = False
-            except Exception as e:
-                self.logger.error(f"{testname} instrument nr {inst_nr}: length test raised an exception: {e}")
-                rv = False
+                expected_len = len(r)
+                
+                chunk_size = 1
+                while chunk_size < expected_len + 4:
+                    # do a series of number of bytes less and more
+                    inst.chunk_size = chunk_size
+                    inst.write(cmd_test)
+                    try:
+                        inst.read_raw()
+                    except Exception as e:
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: read_raw() with chunk_size {inst.chunk_size} failed: {e}")
+                        rv = False
+                        break
+                    chunk_size += 1
+                    # do the first and last 10 chunk sizes
+                    if expected_len > 20 and chunk_size == 11:
+                        chunk_size = expected_len - 10
 
-            old_timeout = inst.timeout
-            try:
-                # flush out the remaining characters, so that the next test can start with a clean buffer
-                inst.timeout = 100 # set a short timeout to test that the read stops at EOI
-                inst.read_raw()
             except Exception as e:
-                self.logger.error(f"{testname} instrument nr {inst_nr}: flush raised an exception: {e}")
-                rv = False
-            finally:
-                inst.timeout = old_timeout
-            return rv
+                self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
+                rv = False                     
+
         # Attributes for Read and Write:
         # VI_ATTR_TERMCHAR_EN
         # VI_ATTR_TERMCHAR

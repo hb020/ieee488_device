@@ -35,6 +35,7 @@ It allows testing of:
 - End conditions: EOS
 - End conditions: EOI
 - End conditions: Count
+- End conditions: Chunk size
 - SRQ: individual, early enable
 - SRQ: individual, late enable
 - SRQ: individual, repeated
@@ -52,8 +53,8 @@ Usage:
 
 ```text
 python3 run.py -h
-usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}] [-cs]
-              [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
+usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}] [-cs]
+              [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover]
               [device_ip]
 
 Test VXI-11.2 gateways and other VISA devices
@@ -66,7 +67,7 @@ options:
   -t, --type {vxi11,hislip,socket,gateway}
                         The type of device to test. Default is gateway.
   -p, --port PORT       The port to use for the device. Default is 0, which means the default port for the device type.
-                        MUST be specified and non-0 for socket type.
+                         This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.
   -a, --addresses ADDRESSES
                         The addresses on the bus, separated by ';'.
                         Addresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.
@@ -74,26 +75,29 @@ options:
                         Is ignored for socket type.
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
-  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}
+  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
                          0 All
                          1 Basic
                          2 End conditions: EOS
                          3 End conditions: EOI
                          4 End conditions: Count
-                         5 SRQ: individual early enable
-                         6 SRQ: individual late enable
-                         7 SRQ: individual, repeated
-                         8 SRQ: single emitter
-                         9 SRQ: multiple emitters
-                        10 Long read
-                        11 Long write
-                        12 Delay: write
-                        13 Delay: read
-                        14 Delay: reply
+                         5 End conditions: Chunk size
+                         6 SRQ: individual early enable
+                         7 SRQ: individual late enable
+                         8 SRQ: individual, repeated
+                         9 SRQ: single emitter
+                        10 SRQ: multiple emitters
+                        11 Long read
+                        12 Long write
+                        13 Delay: write
+                        14 Delay: read
+                        15 Delay: reply
   -cs, --auto-chunk-size
                         Enable automatic chunk size correction, needed with some gateways for the long reads/writes.
   -L, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         The logging level.
+  --discover            Discover the VISA devices auto discoverable by this system, and exit.
+                        If provided, this uses the log level setting and the visa provider setting when discovering.
 ```
 
 ## Status
