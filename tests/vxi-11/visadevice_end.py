@@ -31,7 +31,9 @@ class visadevice_end(visadevice_base.visadevice_base):
             inst.write(cmd_goto_eos)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
-        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
+        if self.visa_type != "socket":
+            # socket does not support the SEND_END_EN attribute, so skip it for those backends
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
         try:
             inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SUPPRESS_END_EN, True)
         except:
@@ -41,7 +43,9 @@ class visadevice_end(visadevice_base.visadevice_base):
     def set_instrument_to_eoi(self, inst, cmd_goto_eoi):
         inst.write(cmd_goto_eoi)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-        inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
+        if self.visa_type != "socket":
+            # socket does not support the SEND_END_EN attribute, so skip it for those backends
+            inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
         try:                
             inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SUPPRESS_END_EN, False)
         except:
@@ -183,7 +187,7 @@ class visadevice_end(visadevice_base.visadevice_base):
         # Attributes for Read and Write:
         # VI_ATTR_TERMCHAR_EN
         # VI_ATTR_TERMCHAR
-        # VI_ATTR_SEND_END_EN (not used by early pyvisa-py, but used by NI-VISA)
+        # VI_ATTR_SEND_END_EN (not used by early pyvisa-py, but used by NI-VISA, not supported on socket, but supported on VXI-11 and hislip)
         
         # Attributes for Read
         # VI_ATTR_SUPPRESS_END_EN (not supported by early pyvisa-py, not supported by NI-Visa on VXI-11, but supported on other types)

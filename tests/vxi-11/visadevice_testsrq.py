@@ -110,7 +110,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         cmds_clear = ["*CLS"]
         if self.visa_type in ["socket"]:
             # cannot do SRQ stuff over socket
-            return {}
+            return { "reason": f"SRQ is not supported on {self.visa_type} instruments" }
         if test == 1:
             # late enable is not supported on VXI11 or Hislip, so skip this test for those instruments
             if self.visa_type in ["vxi11", "hislip"]:
