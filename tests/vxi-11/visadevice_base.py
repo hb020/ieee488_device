@@ -282,7 +282,7 @@ class visadevice_base(object):
             self._inst_contexts[inst_nr]["resource_name"] = self.get_resourcename_for_instrument(self.device_ip, self.visa_provider, addr, self.visa_type, self.visa_port)
             self._inst_contexts[inst_nr]["cmds_init"] = []
             
-    def open_instrument(self, inst_nr: int, testname: str, test: int) -> int:
+    def open_instrument(self, inst_nr: int, testname: str, test: int) -> tuple[int, str]:
         """Open the instrument with the given instrument number.
 
         :param inst_nr: The instrument number
@@ -291,19 +291,20 @@ class visadevice_base(object):
         :type testname: str
         :param test: The test to run. The number is from the index from `testmethods()`.
         :type test: int
-        :return: 0 = OK, 1 = Failed to open instrument, -1 = instrument is to be skipped
-        :rtype: int
+        :return: tuple[int, str] 0 = OK, 1 = Failed to open instrument, -1 = instrument is to be skipped, str = reason for error or skipping
+        :rtype: tuple[int, str]
         """
         if not hasattr(self, 'rm') or self.rm is None:
-            self.logger.error("Resource manager is not initialized")
-            return 1
+            errstr = "Resource manager is not initialized"
+            self.logger.error(f"{testname}: {errstr}")
+            return 1, errstr
         
         resource_name = self._inst_contexts[inst_nr]["resource_name"]
         try:
             inst = self.rm.open_resource(resource_name)
         except Exception as e:
             self.logger.error(f"{testname}: Failed to open {resource_name}: {e}")
-            return 1
+            return 1, str(e)
         inst.timeout = 1000
         if inst is None or not (
                 isinstance(inst, pyvisa.resources.TCPIPInstrument) or 
@@ -311,7 +312,7 @@ class visadevice_base(object):
                 isinstance(inst, pyvisa.resources.USBInstrument) or
                 isinstance(inst, pyvisa.resources.TCPIPSocket)):
             self.logger.error(f"{testname}: Failed to open {resource_name}, I do not support this type of instrument: {type(inst)}")
-            return 1
+            return 1, f"Unsupported instrument type: {type(inst)}"
         
         if isinstance(inst, pyvisa.resources.TCPIPSocket):
             # For socket type, we need to set the termination characters and the read_termination
@@ -331,7 +332,7 @@ class visadevice_base(object):
                 pass
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
-            return 1
+            return 1, f"Failed to query IDN for {resource_name}"
         # self.logger.debug(f"IDN: {idn}")
         self._inst_contexts[inst_nr]["opened"] = True
         self._inst_contexts[inst_nr]["inst"] = inst        
@@ -339,18 +340,20 @@ class visadevice_base(object):
         context = self.get_instrument_commands(inst_nr, idn, test)
 
         if len(context) == 0 or "cmds_init" not in context or len(context["cmds_init"]) == 0:
-            self.logger.warning(f"{testname}: No suitable commands for {resource_name} with IDN \"{idn}\".")
+            self.logger.debug(f"{testname}: No suitable commands for {resource_name} with IDN \"{idn}\".")
             try:
                 inst.close()
             except Exception:
                 pass
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
-            return -1 # skip this instrument
+            if "reason" in context:
+                return -1, context["reason"]
+            return -1, "No suitable commands for this instrument"
 
         for k,v in context.items():
             self._inst_contexts[inst_nr][k] = v
-        return 0
+        return 0,""
     
     def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
         """Get the instrument commands for the instrument and the test
@@ -445,14 +448,14 @@ class visadevice_base(object):
         for inst_nr, context in self._inst_contexts.items():
             resource_name = context["resource_name"]
             self.logger.info(f"{testname}: Connecting to instrument {inst_nr} at {resource_name}")
-            r = self.open_instrument(inst_nr, testname, test)
+            r, reason = self.open_instrument(inst_nr, testname, test)
             if r > 0:
-                self.logger.error(f"{testname}: Failed to setup instrument {inst_nr} at {resource_name}")
+                self.logger.error(f"{testname}: Failed to setup instrument {inst_nr} at {resource_name}: {reason}")
                 self.failed += 1
                 all_passed = False
                 continue
             elif r < 0:
-                self.logger.warning(f"{testname}: Skipping instrument {inst_nr} at {resource_name}")
+                self.logger.warning(f"{testname}: Skipping instrument {inst_nr} at {resource_name}: {reason}")
                 self.skipped += 1
                 continue
             
@@ -471,7 +474,13 @@ class visadevice_base(object):
             self.close_instrument(inst_nr)
         
         if (self.failed == 0):
-            self.logger.info(f"{testname}: OK")
+            if self.skipped == 0:
+                self.logger.info(f"{testname}: OK")
+            else:
+                if self.succeeded == 0:
+                    self.logger.info(f"{testname}: SKIPPED")
+                else:
+                    self.logger.info(f"{testname}: OK, but {self.skipped} instruments were skipped")
         else:
             self.logger.error(f"{testname}: FAILED")
 

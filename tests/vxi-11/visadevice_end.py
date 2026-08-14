@@ -85,8 +85,7 @@ class visadevice_end(visadevice_base.visadevice_base):
         
         # Note: in all "read of client from device" cases, the client can request a maximum size, and the 
         #       gateway should set an end reason if the number of bytes is received. 
-        #       But pyvisa-py does not support that reason code explicitly, as it does its own counting.
-        #       TODO NI-VISA support it?
+
         inst.write_terminator = "\n"
         inst.read_terminator = "\n"
         
@@ -97,13 +96,20 @@ class visadevice_end(visadevice_base.visadevice_base):
                 self.set_instrument_to_eos(inst, cmd_goto_eos)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
+                status = inst.last_status
+                if status != pyvisa.constants.VI_SUCCESS_TERM_CHAR:
+                    if status != pyvisa.constants.VI_SUCCESS:
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOS test failed: expected VI_SUCCESS_TERM_CHAR, got {status}")
+                        return False
+                    else:
+                        self.logger.warning(f"{testname} instrument nr {inst_nr}: EOS test: expected VI_SUCCESS_TERM_CHAR, got VI_SUCCESS. This may be a backend that does not support the EOS attribute reporting, or the device may not support EOS.")
                 expected = expected_reply + "\n"
                 if r != expected:
                     if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
-                        self.logger.error(f"instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOS test failed: expected \"{expected}\", got \"{r}\"")
                         rv = False
             except Exception as e:
-                self.logger.error(f"instrument nr {inst_nr}: EOS test raised an exception: {e}")
+                self.logger.error(f"{testname} instrument nr {inst_nr}: EOS test raised an exception: {e}")
                 rv = False
                 
             self.set_instrument_to_eoi(inst, cmd_goto_eoi)
@@ -115,14 +121,21 @@ class visadevice_end(visadevice_base.visadevice_base):
                 self.set_instrument_to_eoi(inst, cmd_goto_eoi)
                 inst.write(cmd_test)
                 r = inst.read_raw().decode("ascii")
+                status = inst.last_status
+                if status != pyvisa.constants.VI_SUCCESS:
+                    if status == pyvisa.constants.VI_SUCCESS_TERM_CHAR:
+                        self.logger.warning(f"{testname} instrument nr {inst_nr}: EOI test: expected VI_SUCCESS, got VI_SUCCESS_TERM_CHAR. This may be a backend that does not support the EOI attribute reporting, or the device may not support EOI.")
+                    else:
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected VI_SUCCESS, got {status}")
+                        return False
                 r = r.rstrip() # remove the trailing newline, as the EOI case does not have a newline
                 if r != expected_reply:
                     if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
-                        self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
                         return False          
                 
             except Exception as e:
-                self.logger.error(f"instrument nr {inst_nr}: EOI test raised an exception: {e}")
+                self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test raised an exception: {e}")
                 return False
             
         if test == 2:
@@ -134,7 +147,7 @@ class visadevice_end(visadevice_base.visadevice_base):
                 r = inst.read_raw().decode("ascii").rstrip() # remove the trailing newline, as the EOI case does not have a newline
                 if r != expected_reply:
                     if not (len(r) > 0 and len(r) > len(expected_reply) and r.startswith(expected_reply) and expected_reply.endswith(",")):
-                        self.logger.error(f"instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
+                        self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected \"{expected_reply}\", got \"{r}\"")
                         return False
                 # now force the expecte dto be what I just read, in case the real reply is longer
                 expected_reply = r
@@ -142,14 +155,18 @@ class visadevice_end(visadevice_base.visadevice_base):
                 inst.write(cmd_test)
                 take_off = min(5, len(r)-1) # take off at most 5 characters, and leave at least 1. If I make it 0, pyvisa will request all.
                 expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
-                self.logger.debug(f"instrument nr {inst_nr}: length test: reading {len(r)-take_off} characters, expected reply: \"{expected}\"")
+                self.logger.debug(f"{testname} instrument nr {inst_nr}: length test: reading {len(r)-take_off} characters, expected reply: \"{expected}\"")
                 r = inst.read_bytes(len(r)-take_off).decode("ascii") # read less characters than the previous read, to test that the read stops at count
+                status = inst.last_status
+                if status != pyvisa.constants.VI_SUCCESS_MAX_CNT:
+                    self.logger.error(f"{testname} instrument nr {inst_nr}: EOI test failed: expected VI_SUCCESS_MAX_CNT, got {status}")
+                    return False                
                 expected = expected_reply[:-take_off] # remove the last characters from the expected reply, to match the read length
                 if r != expected:
-                    self.logger.error(f"instrument nr {inst_nr}: length test failed: expected \"{expected}\", got \"{r}\"")
+                    self.logger.error(f"{testname} instrument nr {inst_nr}: length test failed: expected \"{expected}\", got \"{r}\"")
                     rv = False
             except Exception as e:
-                self.logger.error(f"instrument nr {inst_nr}: length test raised an exception: {e}")
+                self.logger.error(f"{testname} instrument nr {inst_nr}: length test raised an exception: {e}")
                 rv = False
 
             old_timeout = inst.timeout
@@ -158,7 +175,7 @@ class visadevice_end(visadevice_base.visadevice_base):
                 inst.timeout = 100 # set a short timeout to test that the read stops at EOI
                 inst.read_raw()
             except Exception as e:
-                self.logger.error(f"instrument nr {inst_nr}: flush raised an exception: {e}")
+                self.logger.error(f"{testname} instrument nr {inst_nr}: flush raised an exception: {e}")
                 rv = False
             finally:
                 inst.timeout = old_timeout
@@ -206,16 +223,19 @@ class visadevice_end(visadevice_base.visadevice_base):
             cmd_test = "*ID?"
             expected_reply = "HP8594E"
         if "34465A" in idn:
-            cmd_goto_eos = "*CLS"
+            cmd_goto_eos = "*CLS" # fake it
             cmd_goto_eoi = ""
             cmd_test = "*IDN?"
             expected_reply = "Keysight Technologies,34465A,"
         if "DMM6500" in idn:
-            cmd_goto_eos = "*CLS"
+            cmd_goto_eos = "*CLS" # fake it
             cmd_goto_eoi = ""
             cmd_test = "*IDN?"
             expected_reply = "KEITHLEY INSTRUMENTS,MODEL DMM6500,"
+
         if test == 0 and (len(cmd_test) == 0 or len(cmd_goto_eos) == 0):
+            # no EOS command?
+            # hislip does not support EOS control
             # self.logger.warning(f"instrument nr {inst_nr}: idn \"{idn}\" is not supported for EOS test")
             return {}
         if len(cmd_test) == 0:

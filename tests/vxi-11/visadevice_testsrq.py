@@ -77,13 +77,24 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         if (test == 4):
             if not self._test_multiple_emitting_srq(testname=testname, test=test):
                 ok = False
-        # no need to log, the individual tests will log their own start and end
+        
+        if (self.failed == 0):
+            if self.skipped == 0:
+                self.logger.info(f"{testname}: OK")
+            else:
+                if self.succeeded == 0:
+                    self.logger.info(f"{testname}: SKIPPED")
+                else:
+                    self.logger.info(f"{testname}: OK, but {self.skipped} instruments were skipped")
+        else:
+            self.logger.error(f"{testname}: FAILED")
         return ok
     
     def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
         return False  # Not used, we override run() instead
         
     def prepare_instrument_context(self) -> None:
+        global srq_called
         super().prepare_instrument_context()
         self.srq_event_handler = {}
         self.user_handle = {}
@@ -104,7 +115,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             # late enable is not supported on VXI11 or Hislip, so skip this test for those instruments
             if self.visa_type in ["vxi11", "hislip"]:
                 # cannot do SRQ stuff over VXI11 or Hislip
-                return {}
+                return { "reason": f"SRQ late enable is not supported on {self.visa_type} instruments" }
         
         if "STMEthernet2GPIB" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
@@ -195,6 +206,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         return super().close_instrument(inst_nr)
 
     def _prepare_to_listen_for_srq(self, inst_nr: int, context: dict) -> bool:
+        global srq_called
         cmds = context["cmds_init"] + context["cmds_srq_enable"]
         inst = context["inst"]
         resource_name = context["resource_name"]
@@ -237,8 +249,13 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         srq_user_handle = inst.install_handler(event_type, srq_event_handler, inst_nr)
         self.srq_event_handler[inst_nr] = srq_event_handler
         self.user_handle[inst_nr] = srq_user_handle
-            
-        inst.enable_event(event_type, event_mech, None)
+        
+        try:
+            inst.enable_event(event_type, event_mech, None)
+        except Exception as e:
+            # This happens on pyvisa-py for the moment
+            # self.logger.error(f"Failed to enable SRQ event for instrument {inst_nr}: {e}")
+            return False
         self.srq_enabled[inst_nr] = True
         return True
 
@@ -251,6 +268,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         return True
 
     def _wait_srq_for_instr(self, inst_nr: int, context: dict) -> bool:
+        global srq_called
         if EVENT_MECH == pyvisa.constants.EventMechanism.handler:
             self.logger.debug(f"Waiting for SRQ for instrument {inst_nr} (handler mechanism)")
             for i in range(int(SRQ_WAIT_TIME * 10)):
@@ -273,6 +291,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         return True
 
     def _check_if_had_srq(self, inst_nr: int, expected_SRQ: bool, expected_calls: int, testname: str, context: dict) -> tuple[bool, bool, int]:
+        global srq_called
         # Return values: test failed, had SRQ in STB, number of times handler called
         inst = context["inst"]
         resource_name = context["resource_name"]
@@ -315,13 +334,13 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            r = self.open_instrument(inst_nr, testname, test)
+            r, reason = self.open_instrument(inst_nr, testname, test)
             if r > 0:
-                self.logger.error(f"{testname}: Failed to open {resource_name}")
+                self.logger.error(f"{testname}: Failed to open {resource_name}: {reason}")
                 self.failed += 1
                 continue
             elif r < 0:
-                self.logger.warning(f"{testname}: Skipping {resource_name}")
+                self.logger.warning(f"{testname}: Skipping {resource_name}: {reason}")
                 self.skipped += 1
                 continue
 
@@ -372,11 +391,6 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             else:
                 self.failed += 1
 
-        if (self.failed == 0):
-            self.logger.info(f"{global_testname}: OK")
-        else:
-            self.logger.error(f"{global_testname}: FAILED")
-        
         return self.failed == 0
 
     # Test SRQ handling for a single emitting instrument on the bus, while other instruments are present on the bus, 
@@ -386,7 +400,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         # This counts as 1 test, so the skipped/failed/succeeded counters are set to 1, not incremented for each instrument
         
         if (len(self._inst_contexts) < 2):
-            self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple listeners")
+            self.logger.warning(f"{testname}: Skipping: Only one instrument on the test, cannot test multiple listeners")
             self.skipped = 1
             return True
         
@@ -403,13 +417,13 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             
             this_instrument_ok = True
             resource_name = context["resource_name"]
-            r = self.open_instrument(inst_nr, testname, test)
+            r, reason = self.open_instrument(inst_nr, testname, test)
             if r > 0:
-                self.logger.error(f"{testname}: Failed to open {resource_name}")
+                self.logger.error(f"{testname}: Failed to open {resource_name}: {reason}")
                 self.failed = 1
                 continue
             elif r < 0:
-                self.logger.warning(f"{testname}: Skipping {resource_name}")
+                self.logger.warning(f"{testname}: Skipping {resource_name}: {reason}")
                 self.skipped = 1
                 continue
 
@@ -460,10 +474,6 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         if self.failed == 0 and self.skipped == 0:
             self.succeeded = 1
 
-        if (self.failed == 0):
-            self.logger.info(f"{global_testname}: OK")
-        else:
-            self.logger.error(f"{global_testname}: FAILED")
         return self.failed == 0
 
 
@@ -473,7 +483,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         # This counts as 1 test, so the skipped/failed/succeeded counters are set to 1, not incremented for each instrument
                 
         if (len(self._inst_contexts) < 2):
-            self.logger.warning(f"{testname}: only one instrument on the test, cannot test multiple emitters")
+            self.logger.warning(f"{testname}: Skipping: Only one instrument on the test, cannot test multiple emitters")
             self.skipped = 1
             return True
                 
@@ -489,13 +499,13 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             this_instrument_ok = True
             resource_name = context["resource_name"]
             
-            r = self.open_instrument(inst_nr, testname, test)
+            r, reason = self.open_instrument(inst_nr, testname, test)
             if r > 0:
-                self.logger.error(f"{testname}: Failed to open {resource_name}")
+                self.logger.error(f"{testname}: Failed to open {resource_name}: {reason}")
                 self.failed = 1
                 continue
             elif r < 0:
-                self.logger.warning(f"{testname}: Skipping {resource_name}")
+                self.logger.warning(f"{testname}: Skipping {resource_name}: {reason}")
                 self.skipped = 1
                 continue
 
@@ -545,10 +555,6 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             
         if self.failed == 0 and self.skipped == 0:
             self.succeeded = 1
-        
-        if (self.failed == 0):
-            self.logger.info(f"{global_testname}: OK")
-        else:
-            self.logger.error(f"{global_testname}: FAILED")
+
         return self.failed == 0
 #endregion
