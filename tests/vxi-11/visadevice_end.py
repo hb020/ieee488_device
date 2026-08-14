@@ -41,7 +41,8 @@ class visadevice_end(visadevice_base.visadevice_base):
             pass
 
     def set_instrument_to_eoi(self, inst, cmd_goto_eoi):
-        inst.write(cmd_goto_eoi)
+        if (len(cmd_goto_eoi) > 0):
+            inst.write(cmd_goto_eoi)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
         if self.visa_type != "socket":
             # socket does not support the SEND_END_EN attribute, so skip it for those backends
@@ -236,6 +237,21 @@ class visadevice_end(visadevice_base.visadevice_base):
             cmd_goto_eoi = ""
             cmd_test = "*IDN?"
             expected_reply = "KEITHLEY INSTRUMENTS,MODEL DMM6500,"
+        if "SDM3055" in idn:
+            cmd_goto_eos = "*CLS" # fake it
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            expected_reply = "Siglent Technologies,SDM3055,"
+        if "SDS824X" in idn:
+            cmd_goto_eos = "*CLS" # fake it
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            expected_reply = "Siglent Technologies,SDS824X HD,"
+        if "DG992" in idn:
+            cmd_goto_eos = "*CLS" # fake it
+            cmd_goto_eoi = ""
+            cmd_test = "*IDN?"
+            expected_reply = "Rigol Technologies,DG992,"
 
         if test == 0 and (len(cmd_test) == 0 or len(cmd_goto_eos) == 0):
             # no EOS command?
