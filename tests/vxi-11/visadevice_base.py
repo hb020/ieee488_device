@@ -185,7 +185,7 @@ class visadevice_base(object):
                 return f"TCPIP::{device_ip}::gpib0,{addr}::INSTR"
         raise ValueError(f"Unknown visa_type: {visa_type}. Must be one of 'socket', 'hislip', 'vxi11', or 'gateway'.")
     
-    def discover_visa_devices(self) -> list[str]:
+    def discover_visa_devices(self, query_id: bool = False) -> list[str]:
         """Discover the VISA TCPIP devices auto discoverable by this system.
 
         :return: A list of discovered VISA TCPIP resource names.
@@ -196,7 +196,23 @@ class visadevice_base(object):
             return []
         try:
             resources = self.rm.list_resources()
-            return [resource for resource in resources if str(resource).startswith("TCPIP")]
+            if query_id:
+                # Query *IDN? for each resource to get the IDN string
+                idn_resources = []
+                for resource in resources:
+                    if str(resource).startswith("TCPIP"):
+                        try:
+                            inst = self.rm.open_resource(resource)
+                            idn = inst.query("*IDN?").strip()
+                            idn_resources.append(f"{resource} - {idn}")
+                            inst.close()
+                        except Exception as e:
+                            idn_resources.append(resource)
+                return sorted(idn_resources)
+            else:
+                # Return only the resources that start with "TCPIP"
+                return sorted([resource for resource in resources if str(resource).startswith("TCPIP")])
+
         except Exception as e:
             self.logger.error(f"Failed to discover VISA resources: {e}")
             return []

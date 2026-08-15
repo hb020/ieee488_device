@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("-T", "--test", type=int, default=DEFAULT_TEST, choices=range(0, len(test_steps)+1), help=test_names)
     parser.add_argument("-cs", "--auto-chunk-size", action="store_true", help="Enable automatic chunk size correction, needed with some gateways for the long reads/writes.")
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
-    parser.add_argument("--discover", action="store_true", help="Discover the VISA devices auto discoverable by this system, and exit.\nIf provided, this uses the log level setting and the visa provider setting when discovering.")
+    parser.add_argument("--discover", type=str, nargs="?", const=None, default=False, choices=["id"], metavar="id", help="Discover the VISA devices auto discoverable by this system, and exit.\nIf provided, this uses the log level setting and the visa provider setting when discovering.\nThe result will also print the output from '*IDN?' if you specify 'id'. This may however disturb older devices.")
     
     options = {}
     args = parser.parse_args()
@@ -108,15 +108,17 @@ if __name__ == "__main__":
     if len(visa_provider) == 0:
         visa_provider = None
         
-    if args.discover:
+    if args.discover is not False:
         logger.info(f"Discovering VISA devices using provider {visa_provider if visa_provider else 'default'}...")
         try:
+            # the visadevice_base class is used to discover the devices, 
+            # because it has the discover_visa_devices() method. The Ip address etc are just dummy values
             t = visadevice_base(visa_provider, "127.0.0.1", "0", "gateway", 0, {})
         except Exception as e:
             logger.error(f"Failed to get resource manager for visa provider {visa_provider}: {e}")
             sys.exit(1) 
         
-        devices = t.discover_visa_devices()
+        devices = t.discover_visa_devices(args.discover == "id")
         if len(devices) == 0:
             logger.info("No VISA devices found.")
         else:

@@ -53,8 +53,8 @@ Usage:
 
 ```text
 python3 run.py -h
-usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}] [-cs]
-              [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover]
+usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}]
+              [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]]
               [device_ip]
 
 Test VXI-11.2 gateways and other VISA devices
@@ -96,8 +96,9 @@ options:
                         Enable automatic chunk size correction, needed with some gateways for the long reads/writes.
   -L, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         The logging level.
-  --discover            Discover the VISA devices auto discoverable by this system, and exit.
+  --discover [id]       Discover the VISA devices auto discoverable by this system, and exit.
                         If provided, this uses the log level setting and the visa provider setting when discovering.
+                        The result will also print the output from '*IDN?' if you specify 'id'. This may however disturb older devices.
 ```
 
 ## Status
