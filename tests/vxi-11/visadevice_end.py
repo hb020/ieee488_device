@@ -202,6 +202,8 @@ class visadevice_end(visadevice_base.visadevice_base):
                 expected_len = len(r)
                 
                 chunk_size = 1
+                inst.timeout = max(5000, expected_len * 0.25000)
+
                 while chunk_size < expected_len + 4:
                     # do a series of number of bytes less and more
                     inst.chunk_size = chunk_size
@@ -218,8 +220,10 @@ class visadevice_end(visadevice_base.visadevice_base):
                         chunk_size = expected_len - 10
 
             except Exception as e:
+                inst.chunk_size = 1024 # reset to default
                 self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
-                rv = False                     
+                rv = False   
+            return rv                  
 
         # Attributes for Read and Write:
         # VI_ATTR_TERMCHAR_EN
@@ -229,6 +233,8 @@ class visadevice_end(visadevice_base.visadevice_base):
         # Attributes for Read
         # VI_ATTR_SUPPRESS_END_EN (not supported by early pyvisa-py, not supported by NI-Visa on VXI-11, but supported on other types)
         
+        inst.timeout = 1000
+        inst.chunk_size = 1024 # reset to default
         return self.check_errors(inst_nr, context)
 
     def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
