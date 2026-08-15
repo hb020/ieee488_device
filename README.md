@@ -54,7 +54,7 @@ Usage:
 ```text
 python3 run.py -h
 usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}]
-              [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]]
+              [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]] [--info]
               [device_ip]
 
 Test VXI-11.2 gateways and other VISA devices
@@ -75,6 +75,8 @@ options:
                         Is ignored for socket type.
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
+                        Use 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.
+                        To see what VISA providers are available on your system, run 'pyvisa-info' or run this program with "--info" (same thing).
   -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
                          0 All
                          1 Basic
@@ -99,6 +101,8 @@ options:
   --discover [id]       Discover the VISA devices auto discoverable by this system, and exit.
                         If provided, this uses the log level setting and the visa provider setting when discovering.
                         The result will also print the output from '*IDN?' if you specify 'id'. This may however disturb older devices.
+  --info                Print information about the VISA providers available on this system, and exit.
+                        This is equivalent to running \"pyvisa-info\"
 ```
 
 ## Status
