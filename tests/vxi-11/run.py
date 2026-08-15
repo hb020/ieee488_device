@@ -77,15 +77,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test VXI-11.2 gateways and other VISA devices",
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("device_ip", type=str, nargs="?", default=DEFAULT_IP, help="The IP address of the device to use for tests.")
-    parser.add_argument("-t", "--type", type=str, default=DEFAULT_TYPE, choices=["vxi11", "hislip", "socket", "gateway"], help=f"The type of device to test. Default is {DEFAULT_TYPE}.")
+    parser.add_argument("-t", "--type", type=str, default=DEFAULT_TYPE, choices=["vxi11", "hislip", "socket", "gateway"], help=f"The type of device to test. Default is '{DEFAULT_TYPE}'.")
     parser.add_argument("-p", "--port", type=int, default=0, help="The port to use for the device. Default is 0, which means the default port for the device type.\n This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.")
     parser.add_argument("-a", "--addresses", type=str, default=str(DEFAULT_INST), help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'.\nIs ignored for socket type.")
-    parser.add_argument("-V", "--visa-provider", type=str, default=DEFAULT_PROVIDER, choices=visadevice_base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.\nUse 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.\nTo see what VISA providers are available on your system, run 'pyvisa-info' or run this program with \"--info\" (same thing).")
+    parser.add_argument("-V", "--visa-provider", type=str, default=DEFAULT_PROVIDER, choices=visadevice_base.get_possible_visa_providers(), help="The VISA provider to use. Default is the system default.\nUse 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.\nTo see what VISA providers are available on your system, run 'pyvisa-info' or run this program with '--info' (same thing).")
     parser.add_argument("-T", "--test", type=int, default=DEFAULT_TEST, choices=range(0, len(test_steps)+1), help=test_names)
     parser.add_argument("-cs", "--auto-chunk-size", action="store_true", help="Enable automatic chunk size correction, needed with some gateways for the long reads/writes.")
     parser.add_argument("-L", "--log-level", type=str.upper, default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="The logging level.")
     parser.add_argument("--discover", type=str, nargs="?", const=None, default=False, choices=["id"], metavar="id", help="Discover the VISA devices auto discoverable by this system, and exit.\nIf provided, this uses the log level setting and the visa provider setting when discovering.\nThe result will also print the output from '*IDN?' if you specify 'id'. This may however disturb older devices.")
-    parser.add_argument("--info", action="store_true", help="Print information about the VISA providers available on this system, and exit.\nThis is equivalent to running \"pyvisa-info\".")
+    parser.add_argument("--info", action="store_true", help="Print information about the VISA providers available on this system, and exit.\nThis is equivalent to running 'pyvisa-info'.")
     
     options = {}
     args = parser.parse_args()
@@ -117,13 +117,13 @@ if __name__ == "__main__":
         visa_provider = None
         
     if args.discover is not False:
-        logger.info(f"Discovering VISA devices using VISA provider \"{visa_provider if visa_provider else 'default'}\"...")
+        logger.info(f"Discovering VISA devices using VISA provider '{visa_provider if visa_provider else 'default'}'...")
         try:
             # the visadevice_base class is used to discover the devices, 
             # because it has the discover_visa_devices() method. The Ip address etc are just dummy values
             t = visadevice_base(visa_provider, "127.0.0.1", "0", "gateway", 0, {})
         except Exception as e:
-            logger.error(f"Failed to get resource manager for VISA provider \"{visa_provider if visa_provider else 'default'}\": {e}")
+            logger.error(f"Failed to get resource manager for VISA provider '{visa_provider if visa_provider else 'default'}': {e}")
             sys.exit(1) 
         
         devices = t.discover_visa_devices(args.discover == "id")
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         sys.exit(1)
         
     base_connstring = visadevice_base.get_resourcename_for_instrument(device_ip, visa_provider if visa_provider else 'default', "{addr}", visa_type, port)
-    logger.info(f"Using connection: '{base_connstring}', addresses: '{addresses}', VISA provider: \"{visa_provider if visa_provider else 'default'}\", test to run: {test_to_run if test_to_run != 0 else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}")
+    logger.info(f"Using connection: '{base_connstring}', addresses: '{addresses}', VISA provider: '{visa_provider if visa_provider else 'default'}', test to run: {test_to_run if test_to_run != 0 else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}")
     
     # determine tests to run
     ok = True
@@ -166,7 +166,7 @@ if __name__ == "__main__":
             try:
                 t = tester(visa_provider, device_ip, addresses, visa_type, port, options)
             except Exception as e:
-                logger.error(f"Failed to get resource manager for VISA provider \"{visa_provider if visa_provider else 'default'}\": {e}")
+                logger.error(f"Failed to get resource manager for VISA provider '{visa_provider if visa_provider else 'default'}': {e}")
                 sys.exit(1) 
             
             t.skipped = 0

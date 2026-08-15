@@ -65,7 +65,7 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   -t, --type {vxi11,hislip,socket,gateway}
-                        The type of device to test. Default is gateway.
+                        The type of device to test. Default is 'gateway'.
   -p, --port PORT       The port to use for the device. Default is 0, which means the default port for the device type.
                          This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.
   -a, --addresses ADDRESSES
@@ -76,7 +76,7 @@ options:
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
                         Use 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.
-                        To see what VISA providers are available on your system, run 'pyvisa-info' or run this program with "--info" (same thing).
+                        To see what VISA providers are available on your system, run 'pyvisa-info' or run this program with '--info' (same thing).
   -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
                          0 All
                          1 Basic
@@ -102,7 +102,7 @@ options:
                         If provided, this uses the log level setting and the visa provider setting when discovering.
                         The result will also print the output from '*IDN?' if you specify 'id'. This may however disturb older devices.
   --info                Print information about the VISA providers available on this system, and exit.
-                        This is equivalent to running \"pyvisa-info\"
+                        This is equivalent to running 'pyvisa-info'.
 ```
 
 ## Status
