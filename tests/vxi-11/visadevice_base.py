@@ -195,19 +195,21 @@ class visadevice_base(object):
             self.logger.error("Resource manager is not initialized")
             return []
         try:
-            resources = self.rm.list_resources()
+            resources = self.rm.list_resources(query='TCPIP?*')
             if query_id:
                 # Query *IDN? for each resource to get the IDN string
                 idn_resources = []
                 for resource in resources:
-                    if str(resource).startswith("TCPIP"):
-                        try:
-                            inst = self.rm.open_resource(resource)
-                            idn = inst.query("*IDN?").strip()
-                            idn_resources.append(f"{resource} - {idn}")
-                            inst.close()
-                        except Exception as e:
-                            idn_resources.append(resource)
+                    try:
+                        inst = self.rm.open_resource(resource)
+                        if isinstance(inst, pyvisa.resources.TCPIPSocket):
+                            inst.read_termination = '\n'
+                            inst.write_termination = '\n'
+                        idn = inst.query("*IDN?").strip()
+                        idn_resources.append(f"{resource} - {idn}")
+                        inst.close()
+                    except Exception as e:
+                        idn_resources.append(resource)
                 return sorted(idn_resources)
             else:
                 # Return only the resources that start with "TCPIP"

@@ -32,7 +32,7 @@ import argparse
 import sys
 
 DEFAULT_IP = "192.168.7.116"
-DEFAULT_INST = 1
+DEFAULT_INST = 0
 DEFAULT_PROVIDER = ""
 DEFAULT_TEST = 0
 DEFAULT_TYPE = "gateway"  # "vxi11", "hislip", "socket", "gateway"
