@@ -1,7 +1,7 @@
 import logging
 
 import visadevice_base
-from visadevice_helpers import ieee488_device_longwr_query
+
 
 #region Logging setup
 # Configure logging, and set global log level (for pyvisa etc)

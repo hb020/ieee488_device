@@ -198,11 +198,6 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
                 sleep(0.1)
         except Exception as e:
             self.logger.debug(f"Failed to send init commands to {resource_name}: {e}")
-        try:
-            inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
-        except Exception as e:
-            self.logger.warning(f"Failed to set REN line for {resource_name}: {e}")
-            
         return super().close_instrument(inst_nr)
 
     def _prepare_to_listen_for_srq(self, inst_nr: int, context: dict) -> bool:

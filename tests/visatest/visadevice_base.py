@@ -530,10 +530,10 @@ class visadevice_base(object):
             if self.skipped == 0:
                 self.logger.info(f"{testname}: OK")
             else:
-                if self.succeeded == 0:
+                if self.succeeded == self.skipped:
                     self.logger.info(f"{testname}: SKIPPED")
                 else:
-                    self.logger.info(f"{testname}: OK, but {self.skipped} instruments were skipped")
+                    self.logger.info(f"{testname}: OK, but {self.skipped} instrument(s) were skipped")
         else:
             self.logger.error(f"{testname}: FAILED")
 
@@ -565,6 +565,10 @@ class visadevice_base(object):
     def close_instrument(self, inst_nr: int) -> bool:
         if self._inst_contexts[inst_nr]["inst"] is not None:
             if self._inst_contexts[inst_nr]["opened"]:
+                try:
+                    self._inst_contexts[inst_nr]["inst"].control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
+                except Exception as e:
+                    pass                   
                 try:
                     self._inst_contexts[inst_nr]["inst"].close()
                 except Exception as e:
