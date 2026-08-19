@@ -29,23 +29,7 @@ And after slight modification (that means: deactivation  of the test device code
 
 In `/tests/visatest`, there is a test suite (that can be used from automated test tools) for testing a wide range of things regarding VXI-11.2, VXI-11, Hislip and raw socket VISA communication.
 
-It allows testing of:
-
-- Basic communication
-- End conditions: EOS
-- End conditions: EOI
-- End conditions: Count
-- End conditions: Chunk size
-- SRQ: individual, early enable
-- SRQ: individual, late enable
-- SRQ: individual, repeated
-- SRQ: single emitter, multiple listener
-- SRQ: multiple emitters, single listener
-- Long read
-- Long write
-- Delay: in writing
-- Delay: in reading
-- Delay: in reply
+It allows testing of a wide range of functionality. See the test options below.
 
 It can be used on any VXI-11.2 compatible gateway, and on hislip, VXI-11 and Socket VISA devices, on a range of IVI backends. It supports a range of devices (which can be extended rather easily). The only device however that supports all test cases is the above mentioned ieee488 device, via a gateway. Especially the EOS to EOI switching is something that is not easily found elsewhere.
 
@@ -53,9 +37,9 @@ Usage:
 
 ```text
 python3 visatest -h
-usage: python3 visatest [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}]
-              [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]] [--info]
-              [device_ip]
+usage: python3 visatest [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}]
+                        [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}] [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]] [--info]
+                        [device_ip]
 
 Test VXI-11.2 gateways and other VISA devices
 
@@ -67,7 +51,7 @@ options:
   -t, --type {vxi11,hislip,socket,gateway}
                         The type of device to test. Default is 'gateway'.
   -p, --port PORT       The port to use for the device. Default is 0, which means the default port for the device type.
-                         This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.
+                        This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.
   -a, --addresses ADDRESSES
                         The addresses on the bus, separated by ';'.
                         Addresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.
@@ -77,7 +61,7 @@ options:
                         The VISA provider to use. Default is the system default.
                         Use 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.
                         To see what VISA providers are available on your system, run 'pyvisa-info' or run this program with '--info' (same thing).
-  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
+  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
                          0 All
                          1 Basic
                          2 End conditions: EOS
@@ -94,6 +78,10 @@ options:
                         13 Delay: write
                         14 Delay: read
                         15 Delay: reply
+                        16 Lock: upon open
+                        17 Lock: after open
+                        18 Trigger
+                        19 Remote/Local
   -cs, --auto-chunk-size
                         Enable automatic chunk size correction, needed with some gateways for the long reads/writes.
   -L, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
@@ -135,9 +123,6 @@ Not compliant:
 ### TODO
 
 - Test cases to add:
-  - `address_gtl`, `deassert_gtl` + `asrt_address`, `asrt_address_llo`
-  - Trigger
-  - Lock
   - concurrent access
 - In some cases, on very large reads, when using NI-VISA and my custom gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. You can automatically adapt the chunk size to be bigger than the expected data, via the `--auto-chunk-size` command line parameter to the test script.
 - Allow it to support multiple addresses, and have independent SCPI handlers. That risks being messy though, since the state machine is geared towards a single address, especially around the SPAS state and the SRQ message handling.
