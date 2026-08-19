@@ -6,56 +6,63 @@ import pyvisa
 import pyvisa.constants
 import logging
 
-#region General setup
-#resource_managers: the below plus default
+# region General setup
+# resource_managers: the below plus default
 # On MacOS, only pyvisa-py and NI-VISA are supported, but the latter only as "default"
 # and so far, I haven't found a way to see what is the default.
-RESOURCE_MANAGERS = ['py', 'ni', 'keysight', 'rs']
+RESOURCE_MANAGERS = ["py", "ni", "keysight", "rs"]
 
 # Choose one of the 2
 # EVENT_MECH = pyvisa.constants.EventMechanism.queue
 EVENT_MECH = pyvisa.constants.EventMechanism.handler
 
-SRQ_WAIT_TIME = 2.0 # seconds to wait for SRQ to be received, after emitting it
+SRQ_WAIT_TIME = 2.0  # seconds to wait for SRQ to be received, after emitting it
 
-#endregion
-#region Logging setup
+# endregion
+# region Logging setup
 # Configure logging, and set global log level (for pyvisa etc)
-LOG_LEVEL = logging.INFO # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_LEVEL = logging.INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 logging.basicConfig(
-    level=LOG_LEVEL,
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    handlers=[logging.StreamHandler()]
+    level=LOG_LEVEL, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s", handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 # Set log level for this module
 logger.setLevel(LOG_LEVEL)
-#endregion  
+# endregion
 
-#region test base class
+
+# region test base class
 class visadevice_base(object):
     """
     Base class for VXI-11 tests.
     """
-    
+
     skipped: int = 0  # number of tests skipped in this test class
     options: dict = {}
-    
+
     @property
     def logger(self):
         return logging.getLogger(f"{self.__class__.__name__}")
-    
-    def __init__(self, visa_provider: Optional[str], device_ip: str, inst_addresses: str, visa_type: str, port: int, options: dict = {}):
+
+    def __init__(
+        self,
+        visa_provider: Optional[str],
+        device_ip: str,
+        inst_addresses: str,
+        visa_type: str,
+        port: int,
+        options: dict = {},
+    ):
         """Initialize the VXI-11.2 base test case.
 
         :param visa_provider: The VISA provider to use ('py', 'ni', 'keysight', 'rs', or None).
-                          None, or any string other than the recognized providers,  ('py', 'ni', 'keysight', 'rs') 
+                          None, or any string other than the recognized providers,  ('py', 'ni', 'keysight', 'rs')
                           all designate the system default provider.
         :type visa_provider: str, optional
         :param device_ip: The IP address of the VXI-11.2 gateway
         :type device_ip: str, optional
-        :param inst_addresses: A string specifying the instrument addresses, separated by ';'. 
+        :param inst_addresses: A string specifying the instrument addresses, separated by ';'.
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
         :type inst_addresses: str
@@ -84,18 +91,18 @@ class visadevice_base(object):
     @classmethod
     def testmethods(cls) -> list[str]:
         """Get a list of test methods available in the class.
-        
+
         Every subclass should implement this method to return a list of test methods that it implements.
-        
+
         The run() method will call each of these test methods in turn for each instrument context, or you can give it a specific test number.
-        
-        If you have more than 1 test method in the class use 
+
+        If you have more than 1 test method in the class use
 
         :return: A list of test method names.
         :rtype: list[str]
         """
-        return ["Basic"] 
-    
+        return ["Basic"]
+
     @classmethod
     def get_possible_visa_providers(cls) -> list[str]:
         """Get a list of possible VISA providers for the current platform.
@@ -106,10 +113,10 @@ class visadevice_base(object):
         return RESOURCE_MANAGERS
 
     @classmethod
-    def validate_instrument_addresses(cls,inst_addresses: str, visa_type: str = "gateway") -> list[str] | None:
+    def validate_instrument_addresses(cls, inst_addresses: str, visa_type: str = "gateway") -> list[str] | None:
         """Validate the format of the instrument addresses string.
 
-        :param inst_addresses: A string specifying the instrument addresses, separated by ';'. 
+        :param inst_addresses: A string specifying the instrument addresses, separated by ';'.
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
         :type inst_addresses: str
@@ -120,12 +127,12 @@ class visadevice_base(object):
         """
         if not inst_addresses:
             return None
-        addresses = inst_addresses.split(';')
-        if (len(addresses) == 0):
+        addresses = inst_addresses.split(";")
+        if len(addresses) == 0:
             logger.error("No instrument addresses specified")
             return None
         for addr in addresses:
-            parts = addr.split(',')
+            parts = addr.split(",")
             if len(parts) == 0 or len(parts) > 2:
                 logger.error(f"Invalid instrument address format: {addr}")
                 return None
@@ -136,7 +143,9 @@ class visadevice_base(object):
                     return None
                 if len(parts) == 2:
                     if visa_type != "gateway":
-                        logger.error(f"Secondary addresses are only supported for gateway visa_type, not on {visa_type}. Offending address: {addr}")
+                        logger.error(
+                            f"Secondary addresses are only supported for gateway visa_type, not on {visa_type}. Offending address: {addr}"
+                        )
                         return None
                     secondary = int(parts[1])
                     if secondary < 0 or secondary > 30:
@@ -146,9 +155,11 @@ class visadevice_base(object):
                 logger.error(f"Invalid instrument address format: {addr}")
                 return None
         return addresses
-    
+
     @classmethod
-    def get_resourcename_for_instrument(cls, device_ip: str, visa_provider: str, addr: str, visa_type: str = "gateway", visa_port: int = 0) -> str:
+    def get_resourcename_for_instrument(
+        cls, device_ip: str, visa_provider: str, addr: str, visa_type: str = "gateway", visa_port: int = 0
+    ) -> str:
         """Get the VISA compatible resource name for the given instrument bus address.
 
         :param device_ip: The IP address of the device
@@ -164,7 +175,7 @@ class visadevice_base(object):
         :return: The VISA compatible resource name
         :rtype: str
         """
-        
+
         if visa_type == "socket":
             if visa_port == 0:
                 visa_port = 5025  # default port for socket type
@@ -184,27 +195,39 @@ class visadevice_base(object):
             else:
                 return f"TCPIP::{device_ip}::gpib0,{addr}::INSTR"
         raise ValueError(f"Unknown visa_type: {visa_type}. Must be one of 'socket', 'hislip', 'vxi11', or 'gateway'.")
-    
+
     def discover_visa_devices(self, query_id: bool = False) -> list[str]:
         """Discover the VISA TCPIP devices auto discoverable by this system.
 
         :return: A list of discovered VISA TCPIP resource names.
         :rtype: list[str]
         """
-        if not hasattr(self, 'rm') or self.rm is None:
+        if not hasattr(self, "rm") or self.rm is None:
             self.logger.error("Resource manager is not initialized")
             return []
         try:
-            resources = self.rm.list_resources(query='TCPIP?*')
+            resources = self.rm.list_resources(query="TCPIP?*")
             if query_id:
                 # Query *IDN? for each resource to get the IDN string
                 idn_resources = []
                 for resource in resources:
                     try:
                         inst = self.rm.open_resource(resource)
+                        if inst is None:
+                            self.logger.error(f"Failed to open {resource}")
+                            idn_resources.append(resource)
+                            continue
+                        if not (
+                            isinstance(inst, pyvisa.resources.TCPIPInstrument)
+                            or isinstance(inst, pyvisa.resources.TCPIPSocket)
+                        ):
+                            self.logger.error(f"Unsupported instrument type for {resource}")
+                            idn_resources.append(resource)
+                            inst.close()
+                            continue
                         if isinstance(inst, pyvisa.resources.TCPIPSocket):
-                            inst.read_termination = '\n'
-                            inst.write_termination = '\n'
+                            inst.read_termination = "\n"
+                            inst.write_termination = "\n"
                         idn = inst.query("*IDN?").strip()
                         idn_resources.append(f"{resource} - {idn}")
                         inst.close()
@@ -218,41 +241,41 @@ class visadevice_base(object):
         except Exception as e:
             self.logger.error(f"Failed to discover VISA resources: {e}")
             return []
-    
+
     def close(self):
         """Close all opened instruments and the resource manager."""
         for inst_nr, _ in self._inst_contexts.items():
             self.close_instrument(inst_nr)
-        if hasattr(self, 'rm') and self.rm is not None:
+        if hasattr(self, "rm") and self.rm is not None:
             self.rm.close()
             self.rm = None
-            
+
     def __del__(self):
         """Destructor to clean up resources."""
         self.close()
-            
+
     def get_resource_manager(self, visa_provider: Optional[str]) -> tuple[pyvisa.ResourceManager, str]:
         """
         Get a PyVISA ResourceManager for the specified VISA provider.
-        
+
         :param visa_provider: The VISA provider name ('py', 'ni', 'keysight', 'rs', or None).
-                            None, or any string other than the recognized providers,  ('py', 'ni', 'keysight', 'rs') 
+                            None, or any string other than the recognized providers,  ('py', 'ni', 'keysight', 'rs')
                             all designate the system default provider.
-        
+
         :returns: A tuple of (ResourceManager, provider_name) where provider_name is the resolved provider.
         :raises Exception: If the specified provider is not available on the current platform.
         """
         if visa_provider is None:
-            visa_provider = ''
+            visa_provider = ""
         if not isinstance(visa_provider, str):
             visa_provider = str(visa_provider)
         visa_provider = visa_provider.strip().lower()
-            
+
         if visa_provider == RESOURCE_MANAGERS[0]:
-            return pyvisa.ResourceManager('@py'), visa_provider
+            return pyvisa.ResourceManager("@py"), visa_provider
         if visa_provider == RESOURCE_MANAGERS[1]:
-            if sys.platform == 'win32' or sys.platform == 'win64':
-                libpath = 'C:/Windows/System32/nivisa64.dll'
+            if sys.platform == "win32" or sys.platform == "win64":
+                libpath = "C:/Windows/System32/nivisa64.dll"
                 if os.path.exists(libpath):
                     return pyvisa.ResourceManager(libpath), visa_provider
                 else:
@@ -260,8 +283,8 @@ class visadevice_base(object):
             else:
                 raise Exception(f"NI VISA cannot be selected (yet) on {sys.platform}")
         if visa_provider == RESOURCE_MANAGERS[2]:
-            if sys.platform == 'win32' or sys.platform == 'win64':
-                libpath = 'C:/Program Files (x86)/IVI Foundation/VISA/WinNT/ktvisa/ktbin/visa32.dll'
+            if sys.platform == "win32" or sys.platform == "win64":
+                libpath = "C:/Program Files (x86)/IVI Foundation/VISA/WinNT/ktvisa/ktbin/visa32.dll"
                 if os.path.exists(libpath):
                     os.add_dll_directory("C:/Program Files/Keysight/IO Libraries Suite/bin")
                     os.add_dll_directory("C:/Program Files (x86)/Keysight/IO Libraries Suite/bin")
@@ -271,8 +294,8 @@ class visadevice_base(object):
             else:
                 raise Exception(f"Keysight VISA cannot be selected (yet) on {sys.platform}")
         if visa_provider == RESOURCE_MANAGERS[3]:
-            if sys.platform == 'win32' or sys.platform == 'win64':
-                libpath = 'C:/Program Files (x86)/IVI Foundation/VISA/WinNT/RsVisa/bin/visa32.dll'
+            if sys.platform == "win32" or sys.platform == "win64":
+                libpath = "C:/Program Files (x86)/IVI Foundation/VISA/WinNT/RsVisa/bin/visa32.dll"
                 if os.path.exists(libpath):
                     return pyvisa.ResourceManager(libpath), visa_provider
                 else:
@@ -280,14 +303,12 @@ class visadevice_base(object):
             else:
                 raise Exception(f"R&S VISA cannot be selected (yet) on {sys.platform}")
         else:
-            return pyvisa.ResourceManager(''), 'default' # TODO: find out what visa this really is
+            return pyvisa.ResourceManager(""), "default"  # TODO: find out what visa this really is
 
-    
     def prepare_instrument_context(self) -> None:
-        """Initialize the instrument contexts for the specified range of instruments.
-        """
+        """Initialize the instrument contexts for the specified range of instruments."""
         inst_nr = 0
-        if not hasattr(self, 'inst_addresses') or self.inst_addresses is None:
+        if not hasattr(self, "inst_addresses") or self.inst_addresses is None:
             self.logger.error("No instrument addresses specified")
             return
         for addr in self.inst_addresses:
@@ -297,9 +318,11 @@ class visadevice_base(object):
             self._inst_contexts[inst_nr]["opened"] = False
             self._inst_contexts[inst_nr]["inst"] = None
             self._inst_contexts[inst_nr]["address"] = addr
-            self._inst_contexts[inst_nr]["resource_name"] = self.get_resourcename_for_instrument(self.device_ip, self.visa_provider, addr, self.visa_type, self.visa_port)
+            self._inst_contexts[inst_nr]["resource_name"] = self.get_resourcename_for_instrument(
+                self.device_ip, self.visa_provider, addr, self.visa_type, self.visa_port
+            )
             self._inst_contexts[inst_nr]["cmds_init"] = []
-            
+
     def open_instrument(self, inst_nr: int, testname: str, test: int) -> tuple[int, str]:
         """Open the instrument with the given instrument number.
 
@@ -312,11 +335,11 @@ class visadevice_base(object):
         :return: tuple[int, str] 0 = OK, 1 = Failed to open instrument, -1 = instrument is to be skipped, str = reason for error or skipping
         :rtype: tuple[int, str]
         """
-        if not hasattr(self, 'rm') or self.rm is None:
+        if not hasattr(self, "rm") or self.rm is None:
             errstr = "Resource manager is not initialized"
             self.logger.error(f"{testname}: {errstr}")
             return 1, errstr
-        
+
         resource_name = self._inst_contexts[inst_nr]["resource_name"]
         try:
             inst = self.rm.open_resource(resource_name)
@@ -325,17 +348,20 @@ class visadevice_base(object):
             return 1, str(e)
         inst.timeout = 1000
         if inst is None or not (
-                isinstance(inst, pyvisa.resources.TCPIPInstrument) or 
-                isinstance(inst, pyvisa.resources.GPIBInstrument) or
-                isinstance(inst, pyvisa.resources.USBInstrument) or
-                isinstance(inst, pyvisa.resources.TCPIPSocket)):
-            self.logger.error(f"{testname}: Failed to open {resource_name}, I do not support this type of instrument: {type(inst)}")
+            isinstance(inst, pyvisa.resources.TCPIPInstrument)
+            or isinstance(inst, pyvisa.resources.GPIBInstrument)
+            or isinstance(inst, pyvisa.resources.USBInstrument)
+            or isinstance(inst, pyvisa.resources.TCPIPSocket)
+        ):
+            self.logger.error(
+                f"{testname}: Failed to open {resource_name}, I do not support this type of instrument: {type(inst)}"
+            )
             return 1, f"Unsupported instrument type: {type(inst)}"
-        
+
         if isinstance(inst, pyvisa.resources.TCPIPSocket):
             # For socket type, we need to set the termination characters and the read_termination
-            inst.read_termination = '\n'
-            inst.write_termination = '\n'
+            inst.read_termination = "\n"
+            inst.write_termination = "\n"
 
         try:
             idn = inst.query("*IDN?").strip()
@@ -353,12 +379,12 @@ class visadevice_base(object):
             return 1, f"Failed to query IDN for {resource_name}"
         # self.logger.debug(f"IDN: {idn}")
         self._inst_contexts[inst_nr]["opened"] = True
-        self._inst_contexts[inst_nr]["inst"] = inst        
-        
+        self._inst_contexts[inst_nr]["inst"] = inst
+
         context = self.get_instrument_commands(inst_nr, idn, test)
 
         if len(context) == 0 or "cmds_init" not in context or len(context["cmds_init"]) == 0:
-            self.logger.debug(f"{testname}: No suitable commands for {resource_name} with IDN \"{idn}\".")
+            self.logger.debug(f'{testname}: No suitable commands for {resource_name} with IDN "{idn}".')
             try:
                 inst.close()
             except Exception:
@@ -369,13 +395,13 @@ class visadevice_base(object):
                 return -1, context["reason"]
             return -1, "No suitable commands for this instrument"
 
-        for k,v in context.items():
+        for k, v in context.items():
             self._inst_contexts[inst_nr][k] = v
-        return 0,""
-    
+        return 0, ""
+
     def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
         """Get the instrument commands for the instrument and the test
-        
+
         It must return at least a dict with the following keys:
         - "cmds_init": a list of commands to initialize the instrument for testing. If absent or empty, the test will be skipped for that instrument.
         - "cmd_errq": the command to query the error queue of the instrument, after the init. If empty, no error checking will be performed.
@@ -391,10 +417,13 @@ class visadevice_base(object):
         """
         if "HP859" in idn:
             # older generation HP8590 series spectrum analyzer
-            return { "cmds_init": ["CLS", "CMDERRQ?"], "cmd_errq": "CMDERRQ?" }  # clear the error queue twice, as I have provoked an error with *IDN?
+            return {
+                "cmds_init": ["CLS", "CMDERRQ?"],
+                "cmd_errq": "CMDERRQ?",
+            }  # clear the error queue twice, as I have provoked an error with *IDN?
         else:
-            return { "cmds_init": ["*CLS"], "cmd_errq": ":SYST:ERR?" }
-        
+            return {"cmds_init": ["*CLS"], "cmd_errq": ":SYST:ERR?"}
+
     def initialize_instrument(self, inst_nr: int, context: dict) -> bool:
         """Initialize the instrument with the given context.
 
@@ -417,7 +446,7 @@ class visadevice_base(object):
                 self.logger.error(f"Failed to write command '{cmd}' to instrument {inst_nr}: {e}")
                 return False
         return self.check_errors(inst_nr, context)
-    
+
     def check_errors(self, inst_nr: int, context: dict) -> bool:
         """Check the error queue of the instrument.
 
@@ -434,28 +463,34 @@ class visadevice_base(object):
                 self.logger.debug(f"Instrument {inst_nr} error queue: {err}")
                 # Check if the error is not "0", "+0", "-0", "No error", or empty
                 # The last one is a special case for the HP8590, which returns an empty string when there are no errors.
-                if not (err.startswith("0") or err.startswith("+0") or err.startswith("-0") or err.startswith("No error") or len(err) == 0):
+                if not (
+                    err.startswith("0")
+                    or err.startswith("+0")
+                    or err.startswith("-0")
+                    or err.startswith("No error")
+                    or len(err) == 0
+                ):
                     self.logger.error(f"Instrument {inst_nr} error: {err}")
                     return False
             except pyvisa.VisaIOError as e:
                 self.logger.error(f"Failed to query error queue for instrument {inst_nr}: {e}")
                 return False
         return True
-    
+
     def run(self, test: int) -> bool:
         """Run the tests for all instruments in the specified range.
-        
+
         Must maintain the following counters:
         - self.skipped: number of tests skipped in this test class
         - self.succeeded: number of tests done in this test class
         - self.failed: number of tests failed in this test class
 
-        :param test: The test to run. The number is from the index from `testmethods()`. 
+        :param test: The test to run. The number is from the index from `testmethods()`.
         :type test: int
         :return: True if all tests passed, False otherwise
         :rtype: bool
         """
-        testname = f"Test \"{self.testmethods()[test]}\""
+        testname = f'Test "{self.testmethods()[test]}"'
         self.logger.info(f"{testname}: Start")
         all_passed = True
         # reset counters for this run
@@ -476,22 +511,22 @@ class visadevice_base(object):
                 self.logger.warning(f"{testname}: Skipping instrument {inst_nr} at {resource_name}: {reason}")
                 self.skipped += 1
                 continue
-            
+
             if not self.initialize_instrument(inst_nr, context):
                 self.logger.error(f"{testname}: Failed to initialize instrument {inst_nr} at {resource_name}")
                 all_passed = False
                 self.close_instrument(inst_nr)
                 self.failed += 1
                 continue
-            
+
             if not self.test_instrument(inst_nr, context, test, testname):
                 all_passed = False
                 self.failed += 1
             else:
                 self.succeeded += 1
             self.close_instrument(inst_nr)
-        
-        if (self.failed == 0):
+
+        if self.failed == 0:
             if self.skipped == 0:
                 self.logger.info(f"{testname}: OK")
             else:
@@ -503,16 +538,15 @@ class visadevice_base(object):
             self.logger.error(f"{testname}: FAILED")
 
         return all_passed
-    
-    
+
     def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
         """Run the actual tests for the given instrument number.
-        
+
         This method should be overridden in a subclass to implement specific tests.
-        
-        The context parameter contains all test specific information for the instrument, 
-        as created by the get_instrument_commands method and populated in the setup_instrument method. 
-        
+
+        The context parameter contains all test specific information for the instrument,
+        as created by the get_instrument_commands method and populated in the setup_instrument method.
+
         :param inst_nr: The instrument number
         :type inst_nr: int
         :param context: The instrument context for the given instrument. This context is created by the get_instrument_commands method and contains all test specific information for the instrument.
@@ -540,4 +574,5 @@ class visadevice_base(object):
                 self._inst_contexts[inst_nr]["inst"] = None
         return True
 
-#endregion
+
+# endregion
