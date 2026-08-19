@@ -201,7 +201,7 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         try:
             inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
         except Exception as e:
-            self.logger.debug(f"Failed to set REN line for {resource_name}: {e}")
+            self.logger.warning(f"Failed to set REN line for {resource_name}: {e}")
             
         return super().close_instrument(inst_nr)
 

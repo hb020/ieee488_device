@@ -51,8 +51,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-    
-if __name__ == "__main__":
+
+def main():
     # Parse command line arguments
     
     # The names to use for the tests, indexed by test number. The first test is 0, which means all tests.
@@ -179,3 +179,5 @@ if __name__ == "__main__":
 
     logger.info(f"All tests completed: {'OK' if ok else 'FAILED'}, {skipped} tests skipped, {succeeded} tests succeeded, {failed} tests failed.")
     
+if __name__ == "__main__":
+    main()

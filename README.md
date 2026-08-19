@@ -27,7 +27,7 @@ And after slight modification (that means: deactivation  of the test device code
 
 ## Test tools
 
-In `/tests/vxi-11`, there is a test suite (that can be used from automated test tools) for testing a wide range of things regarding VXI-11.2, VXI-11, Hislip and raw socket VISA communication.
+In `/tests/visatest`, there is a test suite (that can be used from automated test tools) for testing a wide range of things regarding VXI-11.2, VXI-11, Hislip and raw socket VISA communication.
 
 It allows testing of:
 
@@ -52,8 +52,8 @@ It can be used on any VXI-11.2 compatible gateway, and on hislip, VXI-11 and Soc
 Usage:
 
 ```text
-python3 run.py -h
-usage: run.py [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}]
+python3 visatest -h
+usage: python3 visatest [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}] [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}]
               [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]] [--info]
               [device_ip]
 
@@ -134,6 +134,11 @@ Not compliant:
 
 ### TODO
 
+- Test cases to add:
+  - `address_gtl`, `deassert_gtl` + `asrt_address`, `asrt_address_llo`
+  - Trigger
+  - Lock
+  - concurrent access
 - In some cases, on very large reads, when using NI-VISA and my custom gateway, I need to set `inst.chunk_size = ...`, whereas on E5810A I do not need that. You can automatically adapt the chunk size to be bigger than the expected data, via the `--auto-chunk-size` command line parameter to the test script.
 - Allow it to support multiple addresses, and have independent SCPI handlers. That risks being messy though, since the state machine is geared towards a single address, especially around the SPAS state and the SRQ message handling.
 - Add support for parallel polling control commands to the device
