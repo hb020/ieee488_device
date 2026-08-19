@@ -565,7 +565,9 @@ class visadevice_base(object):
     def close_instrument(self, inst_nr: int) -> bool:
         if self._inst_contexts[inst_nr]["inst"] is not None:
             if self._inst_contexts[inst_nr]["opened"]:
+                self.logger.debug(f"Closing instrument {inst_nr} at {self._inst_contexts[inst_nr]['resource_name']}")
                 try:
+                    self.logger.debug(f"Setting instrument {inst_nr} at {self._inst_contexts[inst_nr]['resource_name']} to local mode")
                     self._inst_contexts[inst_nr]["inst"].control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
                 except Exception as e:
                     pass                   

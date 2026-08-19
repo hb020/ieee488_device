@@ -58,7 +58,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
     
     def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
         if self.visa_type in ["socket"]:
-            # cannot do SRQ stuff over socket
+            # cannot do lock stuff over socket
             return { "reason": f"Locking is not supported on {self.visa_type} instruments" }
         
         return super().get_instrument_commands(inst_nr, idn, test)
