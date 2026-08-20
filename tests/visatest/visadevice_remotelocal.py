@@ -26,6 +26,10 @@ class visadevice_remotelocal(visadevice_base.visadevice_base):
     def testmethods(cls) -> list[str]:
         return ["Remote/Local"]
     
+    def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
+        # Do not send any commands, as that would make the instrument remote again
+        return {"cmds_init": [" "], "cmd_errq": None}
+    
     def test_instrument(self, inst_nr: int, context: dict, test: int, testname: str) -> bool:
         inst = context["inst"]
         # Supported operations:

@@ -363,20 +363,24 @@ class visadevice_base(object):
             inst.read_termination = "\n"
             inst.write_termination = "\n"
 
-        try:
-            idn = inst.query("*IDN?").strip()
-            if idn == "":
-                idn = inst.query("*ID?").strip()  # this will have provoked an error to appear in the error queue
-        except pyvisa.VisaIOError as e:
-            self.logger.error(f"{testname}: Failed to query IDN for {resource_name}: {e}")
+        skip_idn = False
+        if skip_idn:
+            idn = "SKIPPED"
+        else:
             try:
-                # This might crash as well...
-                inst.close()
-            except Exception:
-                pass
-            self._inst_contexts[inst_nr]["opened"] = False
-            self._inst_contexts[inst_nr]["inst"] = None
-            return 1, f"Failed to query IDN for {resource_name}"
+                idn = inst.query("*IDN?").strip()
+                if idn == "":
+                    idn = inst.query("*ID?").strip()  # this will have provoked an error to appear in the error queue
+            except pyvisa.VisaIOError as e:
+                self.logger.error(f"{testname}: Failed to query IDN for {resource_name}: {e}")
+                try:
+                    # This might crash as well...
+                    inst.close()
+                except Exception:
+                    pass
+                self._inst_contexts[inst_nr]["opened"] = False
+                self._inst_contexts[inst_nr]["inst"] = None
+                return 1, f"Failed to query IDN for {resource_name}"
         # self.logger.debug(f"IDN: {idn}")
         self._inst_contexts[inst_nr]["opened"] = True
         self._inst_contexts[inst_nr]["inst"] = inst
@@ -404,6 +408,7 @@ class visadevice_base(object):
 
         It must return at least a dict with the following keys:
         - "cmds_init": a list of commands to initialize the instrument for testing. If absent or empty, the test will be skipped for that instrument.
+                       If you want to skip sending init commands, make cmds_init a list with a single empty string, like [" "]. 
         - "cmd_errq": the command to query the error queue of the instrument, after the init. If empty, no error checking will be performed.
 
         :param inst_nr: The instrument number
@@ -437,6 +442,9 @@ class visadevice_base(object):
         inst = context["inst"]
         cmds_init = context["cmds_init"]
         for cmd in cmds_init:
+            if cmd is None or cmd.strip() == "":
+                continue
+            self.logger.debug(f"Initializing instrument {inst_nr} with command: {cmd}")
             try:
                 if cmd.endswith("?"):
                     inst.query(cmd)
@@ -458,6 +466,8 @@ class visadevice_base(object):
         :rtype: bool
         """
         if "cmd_errq" in context and context["cmd_errq"]:
+            if context["cmd_errq"].strip() == "":
+                return True
             try:
                 err = context["inst"].query(context["cmd_errq"]).strip()
                 self.logger.debug(f"Instrument {inst_nr} error queue: {err}")
