@@ -129,7 +129,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
                 if inst is not None:
                     try:
                         inst.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
-                    except Exception as e:
+                    except Exception as e2:
                         pass
                     inst.close()
                     inst = None
