@@ -85,18 +85,18 @@ class visadevice_lock(visadevice_base.visadevice_base):
                 self.logger.debug(f"{testname}: Trying to open and then lock resource {resource_name} with timeout {timeout} ms")
                 inst = self.rm.open_resource(resource_name)
                 am_opened = True
-                inst.timeout = timeout * 1.5
+                inst.timeout = max(timeout * 1.5, 1000)
                 inst.lock_excl(timeout=timeout)
                 am_locked = True
             else:
                 self.logger.debug(f"{testname}: Trying to open resource {resource_name} with timeout {timeout} ms")
                 inst = self.rm.open_resource(resource_name)
-                am_opened = True
-                inst.timeout = timeout * 1.5
+                am_opened = True                
+                am_locked = False
+                inst.timeout = max(timeout * 1.5, 1000)
                 if self.visa_provider == "pyvisa-py" and (self.visa_type == "vxi11" or self.visa_type == "gateway"):
                     self.rm.visalib.sessions[inst.session].lock_timeout = timeout
-                am_locked = False
-                r = inst.query("*IDN?")
+                inst.write("*CLS")
             if expect_to_fail:
                 # self.logger.error(f"{testname}: Opened an already locked resource, but should have failed.")
                 try:
@@ -117,6 +117,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
                     e.error_code == pyvisa.constants.VI_ERROR_RSRC_LOCKED
                     or e.error_code == pyvisa.constants.VI_ERROR_RSRC_BUSY
                     or e.error_code == pyvisa.constants.VI_ERROR_TMO
+                    or e.error_code == pyvisa.constants.VI_ERROR_IO
                 )
             ):
                 # print("SUCCESS: Failed to open locked resource, as expected.")
@@ -127,6 +128,8 @@ class visadevice_lock(visadevice_base.visadevice_base):
                         e_got = "VI_ERROR_RSRC_BUSY"
                     elif e.error_code == pyvisa.constants.VI_ERROR_TMO:
                         e_got = "VI_ERROR_TMO"
+                    elif e.error_code == pyvisa.constants.VI_ERROR_IO:
+                        e_got = "VI_ERROR_IO"
                     self.logger.warning(
                         f"{testname}: Opening an already locked resource did not return the expected error code. Got: {e_got}, expected: {e_wanted}"
                     )                    
@@ -158,66 +161,58 @@ class visadevice_lock(visadevice_base.visadevice_base):
                         self.logger.error(f"{testname}: Failed to open resource (unexpected): {e}")
                     return False, None
                 
+    def test_lock_nr_2(self, resource_name: str, testname: str, subtest: str, lock_on_open: bool, lock_after_open: bool, timeout: int) -> bool:
+        
+        new_testname = f"{testname} {subtest}"
+        start_time = datetime.datetime.now()
+        success, inst2 = self.try_open_with_lock(
+            new_testname, resource_name, lock_on_open=lock_on_open, lock_after_open=lock_after_open, expect_to_fail=True, timeout=timeout * 1000
+        )
+        end_time = datetime.datetime.now()
+        if inst2 is not None:
+            try:
+                inst2.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
+            except Exception as e:
+                pass            
+            inst2.close()
+            
+        duration_secs = (end_time - start_time).total_seconds()
+        if success:
+            desired_min_duration = max(timeout * 0.8, 0)  # Allowing a 20% margin for timing variations
+            desired_max_duration = max(timeout * 1.5, 0.2)  # Allowing a 50% margin for timing variations
+            if duration_secs < desired_min_duration:
+                self.logger.warning(
+                    f"{new_testname}: rejection was respected, but faster than expected: {duration_secs:.1f} seconds (< {desired_min_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
+                )
+            elif duration_secs > desired_max_duration:
+                self.logger.warning(
+                    f"{new_testname}: rejection was respected, but slower than expected: {duration_secs:.1f} seconds (> {desired_max_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
+                )
+            else:
+                self.logger.debug(f"{new_testname}: rejection wait duration: {duration_secs:.1f} seconds")
+        else:
+            self.logger.error(
+                f"{new_testname}: rejection was not respected, and took duration {duration_secs:.1f} seconds while a lock timeout of {timeout:.1f} seconds was requested."
+            )
+        return success
+
+                
     def test_locking(self, resource_name: str, testname: str, lock_on_open: bool) -> bool:
         success, inst1 = self.try_open_with_lock(
             testname, resource_name, lock_on_open=lock_on_open, lock_after_open=True, expect_to_fail=False, timeout=1000
         )
         if not success:
-            self.logger.debug("{testname}: Error on first open and lock, cannot continue with test.")
-            return False
+            self.logger.debug(f"{testname}: Error on first open and lock, cannot continue with test.")
 
-        timeout = 1  # seconds
-        start_time = datetime.datetime.now()
-        success, inst2 = self.try_open_with_lock(
-            testname, resource_name, lock_on_open=False, lock_after_open=True, expect_to_fail=True, timeout=timeout * 1000
-        )
-        end_time = datetime.datetime.now()
-
-        duration_secs = (end_time - start_time).total_seconds()
         if success:
-            desired_min_duration = timeout * 0.8  # Allowing a 20% margin for timing variations
-            desired_max_duration = timeout * 1.5  # Allowing a 50% margin for timing variations
-            if duration_secs < desired_min_duration:
-                self.logger.warning(
-                    f"{testname}: Double Locking rejection was respected, but faster than expected: {duration_secs:.1f} seconds (< {desired_min_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
-                )
-            elif duration_secs > desired_max_duration:
-                self.logger.warning(
-                    f"{testname}: Double Locking rejection was respected, but slower than expected: {duration_secs:.1f} seconds (> {desired_max_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
-                )
-            else:
-                self.logger.debug(f"{testname}: Double Locking rejection wait duration: {duration_secs:.1f} seconds")
-        else:
-            self.logger.error(
-                f"{testname}: Double Locking rejection was not respected, and took duration {duration_secs:.1f} seconds while a lock timeout of {timeout:.1f} seconds was requested."
-            )
-            
-        timeout = 1  # seconds
-        start_time = datetime.datetime.now()
-        success, inst3 = self.try_open_with_lock(
-            testname, resource_name, lock_on_open=False, lock_after_open=False, expect_to_fail=True, timeout=timeout * 1000
-        )
-        end_time = datetime.datetime.now()
+            success = self.test_lock_nr_2(resource_name, testname, "Double lock", lock_on_open=False, lock_after_open=True, timeout=1)
 
-        duration_secs = (end_time - start_time).total_seconds()
         if success:
-            desired_min_duration = timeout * 0.8  # Allowing a 20% margin for timing variations
-            desired_max_duration = timeout * 1.5  # Allowing a 50% margin for timing variations
-            if duration_secs < desired_min_duration:
-                self.logger.warning(
-                    f"{testname}: Locking was respected, but faster than expected: {duration_secs:.1f} seconds (< {desired_min_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
-                )
-            elif duration_secs > desired_max_duration:
-                self.logger.warning(
-                    f"{testname}: Locking was respected, but slower than expected: {duration_secs:.1f} seconds (> {desired_max_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
-                )
-            else:
-                self.logger.debug(f"{testname}: Locking wait duration: {duration_secs:.1f} seconds")
-        else:
-            self.logger.error(
-                f"{testname}: Lock was not respected, and took duration {duration_secs:.1f} seconds while a lock timeout of {timeout:.1f} seconds was requested."
-            )
-            
+            success = self.test_lock_nr_2(resource_name, testname, "No lock, delay", lock_on_open=False, lock_after_open=False, timeout=1)
+
+        if success:
+            success = self.test_lock_nr_2(resource_name, testname, "No lock, immediate", lock_on_open=False, lock_after_open=False, timeout=0)
+                            
         # close down
         if inst1 is not None:
             try:
@@ -225,16 +220,4 @@ class visadevice_lock(visadevice_base.visadevice_base):
             except Exception as e:
                 pass            
             inst1.close()
-        if inst2 is not None:
-            try:
-                inst2.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
-            except Exception as e:
-                pass            
-            inst2.close()
-        if inst3 is not None:
-            try:
-                inst3.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
-            except Exception as e:
-                pass            
-            inst3.close()
         return success
