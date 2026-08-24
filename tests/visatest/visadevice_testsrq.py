@@ -113,9 +113,9 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
             return { "reason": f"SRQ is not supported on {self.visa_type} instruments" }
         if test == 1:
             # late enable is not supported on VXI11 or Hislip, so skip this test for those instruments
-            if self.visa_type in ["vxi11", "hislip"]:
+            if not self.visa_type == "gateway":
                 # cannot do SRQ stuff over VXI11 or Hislip
-                return { "reason": f"SRQ late enable is not supported on {self.visa_type} instruments" }
+                return { "reason": f"SRQ late enable is only supported on VXI-11.2 gateways" }
         
         if "STMEthernet2GPIB" in idn:
             cmds_init = ["*CLS", "*SRE 0", "*CLS", "*RST"]
