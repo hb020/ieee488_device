@@ -64,7 +64,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
         return super().get_instrument_commands(inst_nr, idn, test)
 
     def try_open_with_lock(
-        self, testname: str, resource_name: str, lock_on_open: bool, expect_to_fail: bool, timeout: float
+        self, testname: str, resource_name: str, lock_on_open: bool, lock_after_open: bool, expect_to_fail: bool, timeout: int
     ) -> tuple[bool, Optional[pyvisa.resources.Resource]]:
         inst = None
         if self.rm is None:
@@ -73,23 +73,32 @@ class visadevice_lock(visadevice_base.visadevice_base):
         am_locked = False
         am_opened = False
         try:
-            if not lock_on_open:
-                self.logger.debug(f"{testname}: Trying to open and then lock resource {resource_name} with timeout {timeout} ms")
-                inst = self.rm.open_resource(resource_name)
-                am_opened = True
-                inst.timeout = timeout * 1.5
-                inst.lock_timeout = timeout
-                inst.lock_excl(timeout=timeout)
-                am_locked = True
-            else:
+            if lock_on_open:
+                # lock on open
                 self.logger.debug(f"{testname}: Trying to open+lock resource {resource_name} with timeout {timeout} ms")
                 inst = self.rm.open_resource(
                     resource_name, open_timeout=timeout, access_mode=pyvisa.constants.AccessModes.exclusive_lock
                 )
                 am_opened = True
                 am_locked = True
+            elif lock_after_open:
+                self.logger.debug(f"{testname}: Trying to open and then lock resource {resource_name} with timeout {timeout} ms")
+                inst = self.rm.open_resource(resource_name)
+                am_opened = True
+                inst.timeout = timeout * 1.5
+                inst.lock_excl(timeout=timeout)
+                am_locked = True
+            else:
+                self.logger.debug(f"{testname}: Trying to open resource {resource_name} with timeout {timeout} ms")
+                inst = self.rm.open_resource(resource_name)
+                am_opened = True
+                inst.timeout = timeout * 1.5
+                if self.visa_provider == "pyvisa-py" and (self.visa_type == "vxi11" or self.visa_type == "gateway"):
+                    self.rm.visalib.sessions[inst.session].lock_timeout = timeout
+                am_locked = False
+                r = inst.query("*IDN?")
             if expect_to_fail:
-                # self.logger.error(f"{testname}: Opened and locked an already locked resource, but should have failed.")
+                # self.logger.error(f"{testname}: Opened an already locked resource, but should have failed.")
                 try:
                     if am_locked and inst is not None:
                         inst.unlock()
@@ -148,10 +157,10 @@ class visadevice_lock(visadevice_base.visadevice_base):
                     else:
                         self.logger.error(f"{testname}: Failed to open resource (unexpected): {e}")
                     return False, None
-
+                
     def test_locking(self, resource_name: str, testname: str, lock_on_open: bool) -> bool:
         success, inst1 = self.try_open_with_lock(
-            testname, resource_name, lock_on_open=lock_on_open, expect_to_fail=False, timeout=1000
+            testname, resource_name, lock_on_open=lock_on_open, lock_after_open=True, expect_to_fail=False, timeout=1000
         )
         if not success:
             self.logger.debug("{testname}: Error on first open and lock, cannot continue with test.")
@@ -160,7 +169,33 @@ class visadevice_lock(visadevice_base.visadevice_base):
         timeout = 1  # seconds
         start_time = datetime.datetime.now()
         success, inst2 = self.try_open_with_lock(
-            testname, resource_name, lock_on_open=False, expect_to_fail=True, timeout=timeout * 1000
+            testname, resource_name, lock_on_open=False, lock_after_open=True, expect_to_fail=True, timeout=timeout * 1000
+        )
+        end_time = datetime.datetime.now()
+
+        duration_secs = (end_time - start_time).total_seconds()
+        if success:
+            desired_min_duration = timeout * 0.8  # Allowing a 20% margin for timing variations
+            desired_max_duration = timeout * 1.5  # Allowing a 50% margin for timing variations
+            if duration_secs < desired_min_duration:
+                self.logger.warning(
+                    f"{testname}: Double Locking rejection was respected, but faster than expected: {duration_secs:.1f} seconds (< {desired_min_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
+                )
+            elif duration_secs > desired_max_duration:
+                self.logger.warning(
+                    f"{testname}: Double Locking rejection was respected, but slower than expected: {duration_secs:.1f} seconds (> {desired_max_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
+                )
+            else:
+                self.logger.debug(f"{testname}: Double Locking rejection wait duration: {duration_secs:.1f} seconds")
+        else:
+            self.logger.error(
+                f"{testname}: Double Locking rejection was not respected, and took duration {duration_secs:.1f} seconds while a lock timeout of {timeout:.1f} seconds was requested."
+            )
+            
+        timeout = 1  # seconds
+        start_time = datetime.datetime.now()
+        success, inst3 = self.try_open_with_lock(
+            testname, resource_name, lock_on_open=False, lock_after_open=False, expect_to_fail=True, timeout=timeout * 1000
         )
         end_time = datetime.datetime.now()
 
@@ -177,11 +212,13 @@ class visadevice_lock(visadevice_base.visadevice_base):
                     f"{testname}: Locking was respected, but slower than expected: {duration_secs:.1f} seconds (> {desired_max_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
                 )
             else:
-                self.logger.debug(f"{testname}: Wait duration: {duration_secs:.1f} seconds")
+                self.logger.debug(f"{testname}: Locking wait duration: {duration_secs:.1f} seconds")
         else:
             self.logger.error(
                 f"{testname}: Lock was not respected, and took duration {duration_secs:.1f} seconds while a lock timeout of {timeout:.1f} seconds was requested."
             )
+            
+        # close down
         if inst1 is not None:
             try:
                 inst1.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
@@ -194,4 +231,10 @@ class visadevice_lock(visadevice_base.visadevice_base):
             except Exception as e:
                 pass            
             inst2.close()
+        if inst3 is not None:
+            try:
+                inst3.control_ren(pyvisa.constants.RENLineOperation.address_gtl) # local, for that instrument
+            except Exception as e:
+                pass            
+            inst3.close()
         return success
