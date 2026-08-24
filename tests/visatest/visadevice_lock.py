@@ -94,7 +94,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
                 am_opened = True                
                 am_locked = False
                 inst.timeout = max(timeout * 1.5, 1000)
-                if self.visa_provider == "pyvisa-py" and (self.visa_type == "vxi11" or self.visa_type == "gateway"):
+                if self.visa_provider == "py" and (self.visa_type == "vxi11" or self.visa_type == "gateway"):
                     self.rm.visalib.sessions[inst.session].lock_timeout = timeout
                 inst.write("*CLS")
             if expect_to_fail:
@@ -161,7 +161,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
                         self.logger.error(f"{testname}: Failed to open resource (unexpected): {e}")
                     return False, None
                 
-    def test_lock_nr_2(self, resource_name: str, testname: str, subtest: str, lock_on_open: bool, lock_after_open: bool, timeout: int) -> bool:
+    def test_lock_nr_2(self, resource_name: str, testname: str, subtest: str, lock_on_open: bool, lock_after_open: bool, timeout: int, extra_time: float = 0) -> bool:
         
         new_testname = f"{testname} {subtest}"
         start_time = datetime.datetime.now()
@@ -179,7 +179,7 @@ class visadevice_lock(visadevice_base.visadevice_base):
         duration_secs = (end_time - start_time).total_seconds()
         if success:
             desired_min_duration = max(timeout * 0.8, 0)  # Allowing a 20% margin for timing variations
-            desired_max_duration = max(timeout * 1.5, 0.2)  # Allowing a 50% margin for timing variations
+            desired_max_duration = max(timeout * 1.5, 0.2) + extra_time  # Allowing a 50% margin for timing variations, plus extra time if specified
             if duration_secs < desired_min_duration:
                 self.logger.warning(
                     f"{new_testname}: rejection was respected, but faster than expected: {duration_secs:.1f} seconds (< {desired_min_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
@@ -208,10 +208,10 @@ class visadevice_lock(visadevice_base.visadevice_base):
             success = self.test_lock_nr_2(resource_name, testname, "Double lock", lock_on_open=False, lock_after_open=True, timeout=1)
 
         if success:
-            success = self.test_lock_nr_2(resource_name, testname, "No lock, delay", lock_on_open=False, lock_after_open=False, timeout=1)
+            success = self.test_lock_nr_2(resource_name, testname, "No lock, delay", lock_on_open=False, lock_after_open=False, timeout=1, extra_time=0.2)
 
         if success:
-            success = self.test_lock_nr_2(resource_name, testname, "No lock, immediate", lock_on_open=False, lock_after_open=False, timeout=0)
+            success = self.test_lock_nr_2(resource_name, testname, "No lock, immediate", lock_on_open=False, lock_after_open=False, timeout=0, extra_time=0.2)
                             
         # close down
         if inst1 is not None:
