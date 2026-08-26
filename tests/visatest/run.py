@@ -121,7 +121,7 @@ def main():
         "--addresses",
         type=str,
         default=str(DEFAULT_INST),
-        help="The addresses on the bus, separated by ';'.\nAddresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.\nExamples: '1' or '1;2,0;2,1'.\nIs ignored for socket type.",
+        help=f"The addresses on the bus, separated by ';'. Default is {DEFAULT_INST}.\nAddresses may contain secondary addresses, in which case the format is '{{primary}},{{secondary}}'.\nExamples: '1' or '1;2,0;2,1'.\nIs ignored for socket type, and should normally be 0 for hislip and vxi-11.",
     )
     parser.add_argument(
         "-V",
@@ -131,8 +131,15 @@ def main():
         choices=visadevice_base.get_possible_visa_providers(),
         help="The VISA provider to use. Default is the system default.\nUse 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.\nTo see what VISA providers are available on your system, run 'pyvisa-info' or run this program with '--info' (same thing).",
     )
+    
     parser.add_argument(
-        "-T", "--test", type=int, default=DEFAULT_TEST, choices=range(0, len(test_steps) + 1), help=test_names
+        "-T",
+        "--test",
+        nargs="+",
+        type=int,
+        choices=range(0, len(test_steps) + 1),
+        default=[DEFAULT_TEST],
+        help=f"One or more test numbers to run (separated by spaces). Valid values are 0, or 1..{len(test_steps)}.\n{test_names}",
     )
     parser.add_argument(
         "-cs",
@@ -220,7 +227,13 @@ def main():
 
     addresses = args.addresses
 
-    test_to_run = args.test
+    tests_to_run = args.test
+    if len(tests_to_run) > 0:
+        if 0 in tests_to_run:
+            tests_to_run = [0]
+    else:
+        tests_to_run = [DEFAULT_TEST]
+
     device_ip = args.device_ip
     visa_type = args.type
     port = args.port
@@ -238,7 +251,7 @@ def main():
         device_ip, visa_provider if visa_provider else "default", "{addr}", visa_type, port
     )
     logger.info(
-        f"Using connection: '{base_connstring}', addresses: '{addresses}', VISA provider: '{visa_provider if visa_provider else 'default'}', test to run: {test_to_run if test_to_run != 0 else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}"
+        f"Using connection: '{base_connstring}', addresses: '{addresses}', VISA provider: '{visa_provider if visa_provider else 'default'}', tests to run: {tests_to_run if tests_to_run != [0] else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}"
     )
 
     # determine tests to run
@@ -247,7 +260,7 @@ def main():
     failed = 0
     succeeded = 0
     for i, (tester, step, global_test_nr, local_test_nr) in enumerate(test_steps):
-        if global_test_nr == test_to_run or test_to_run == 0:
+        if global_test_nr in tests_to_run or 0 in tests_to_run:
             try:
                 t = tester(visa_provider, device_ip, addresses, visa_type, port, options)
             except Exception as e:
