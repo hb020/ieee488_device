@@ -93,9 +93,14 @@ class visadevice_lock(visadevice_base.visadevice_base):
                 inst = self.rm.open_resource(resource_name)
                 am_opened = True                
                 am_locked = False
-                inst.timeout = max(timeout * 1.5, 1000)
+                inst.timeout = timeout
                 if self.visa_provider == "py" and (self.visa_type == "vxi11" or self.visa_type == "gateway"):
-                    self.rm.visalib.sessions[inst.session].lock_timeout = timeout
+                    VI_KTATTR_LOCKWAIT = 0x0FFF002B
+                    if timeout == 0:
+                        inst.set_visa_attribute(VI_KTATTR_LOCKWAIT, 0)
+                    else:
+                        inst.set_visa_attribute(VI_KTATTR_LOCKWAIT, 1)
+                    # self.rm.visalib.sessions[inst.session].lock_timeout = timeout  # legacy
                 inst.write("*CLS")
             if expect_to_fail:
                 # self.logger.error(f"{testname}: Opened an already locked resource, but should have failed.")
