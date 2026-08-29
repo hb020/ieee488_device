@@ -108,12 +108,12 @@ class visadevice_testsrq(visadevice_base.visadevice_base):
         cmds_srq_provoke = ""  # mandatory, must be set for instruments that support SRQ, otherwise the test will be skipped for that instrument
         cmds_srq_disable = []
         cmds_clear = ["*CLS"]
-        if self.visa_type in ["socket"]:
+        if self.resource_type in ["socket"]:
             # cannot do SRQ stuff over socket
-            return { "reason": f"SRQ is not supported on {self.visa_type} instruments" }
+            return { "reason": f"SRQ is not supported on {self.resource_type} instruments" }
         if test == 1:
             # late enable is not supported on VXI11 or Hislip, so skip this test for those instruments
-            if not self.visa_type == "gateway":
+            if not self.resource_type == "gateway":
                 # cannot do SRQ stuff over VXI11 or Hislip
                 return { "reason": f"SRQ late enable is only supported on VXI-11.2 gateways" }
         

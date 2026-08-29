@@ -50,7 +50,7 @@ class visadevice_base(object):
         visa_provider: Optional[str],
         device_ip: str,
         inst_addresses: str,
-        visa_type: str,
+        resource_type: str,
         port: int,
         options: dict = {},
     ):
@@ -66,8 +66,8 @@ class visadevice_base(object):
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
         :type inst_addresses: str
-        :param visa_type: The type of VISA connection (default is "gateway").
-        :type visa_type: str
+        :param resource_type: The type of VISA connection (default is "gateway").
+        :type resource_type: str
         :param port: The VISA port number (default is 0).
         :type port: int
         :raises Exception: If the specified provider is not available on the current platform.
@@ -77,12 +77,12 @@ class visadevice_base(object):
         self.succeeded = 0
         self.failed = 0
         self.device_ip = device_ip
-        self.inst_addresses = self.validate_instrument_addresses(inst_addresses, visa_type)
+        self.inst_addresses = self.validate_instrument_addresses(inst_addresses, resource_type)
         if self.inst_addresses is None:
             raise ValueError(f"Invalid instrument addresses: {inst_addresses}")
         self.options = options
         self._inst_contexts = {}
-        self.visa_type = visa_type
+        self.resource_type = resource_type
         self.visa_port = port
         self.rm, self.visa_provider = self.get_resource_manager(visa_provider)
         self.logger.debug(f"Using VISA provider: {self.visa_provider}")
@@ -113,15 +113,15 @@ class visadevice_base(object):
         return RESOURCE_MANAGERS
 
     @classmethod
-    def validate_instrument_addresses(cls, inst_addresses: str, visa_type: str = "gateway") -> list[str] | None:
+    def validate_instrument_addresses(cls, inst_addresses: str, resource_type: str = "gateway") -> list[str] | None:
         """Validate the format of the instrument addresses string.
 
         :param inst_addresses: A string specifying the instrument addresses, separated by ';'.
                                Addresses may contain secondary addresses, in which case the format is "{primary},{secondary}"}.
                                Examples: "1" or "1;2,0;2,1"
         :type inst_addresses: str
-        :param visa_type: The type of VISA connection (default is "gateway").
-        :type visa_type: str
+        :param resource_type: The type of VISA connection (default is "gateway").
+        :type resource_type: str
         :return: The list of addresses if the format is valid, None otherwise.
         :rtype: list[str] | None
         """
@@ -142,9 +142,9 @@ class visadevice_base(object):
                     logger.error(f"Invalid primary address: {primary}")
                     return None
                 if len(parts) == 2:
-                    if visa_type != "gateway":
+                    if resource_type != "gateway":
                         logger.error(
-                            f"Secondary addresses are only supported for gateway visa_type, not on {visa_type}. Offending address: {addr}"
+                            f"Secondary addresses are only supported for gateway resource_type, not on {resource_type}. Offending address: {addr}"
                         )
                         return None
                     secondary = int(parts[1])
@@ -158,7 +158,7 @@ class visadevice_base(object):
 
     @classmethod
     def get_resourcename_for_instrument(
-        cls, device_ip: str, visa_provider: str, addr: str, visa_type: str = "gateway", visa_port: int = 0
+        cls, device_ip: str, visa_provider: str, addr: str, resource_type: str = "gateway", visa_port: int = 0
     ) -> str:
         """Get the VISA compatible resource name for the given instrument bus address.
 
@@ -168,33 +168,33 @@ class visadevice_base(object):
         :type visa_provider: str
         :param addr: The instrument bus address (may have secondary address, in the format "{primary},{secondary}").
         :type addr: str
-        :param visa_type: The type of VISA connection (default is "gateway").
-        :type visa_type: str
+        :param resource_type: The type of VISA connection (default is "gateway").
+        :type resource_type: str
         :param visa_port: The VISA port number (default is 0).
         :type visa_port: int
         :return: The VISA compatible resource name
         :rtype: str
         """
 
-        if visa_type == "socket":
+        if resource_type == "socket":
             if visa_port == 0:
                 visa_port = 5025  # default port for socket type
             return f"TCPIP::{device_ip}::{visa_port}::SOCKET"
-        if visa_type == "hislip":
+        if resource_type == "hislip":
             if visa_port == 0:
                 return f"TCPIP::{device_ip}::hislip{addr}::INSTR"
             else:
                 return f"TCPIP::{device_ip}::hislip{addr},{visa_port}::INSTR"
-        if visa_type == "vxi11":
+        if resource_type == "vxi11":
             return f"TCPIP::{device_ip}::inst{addr}::INSTR"
-        if visa_type == "gateway":
+        if resource_type == "gateway":
             if visa_provider == "rs":
                 # RS requires it to start with "inst". You can set the SICL in the gateway generally
                 # E5810 requires SICL in that case to be set to "inst0", making the GPIB device 5:1 to become inst0,5,1.
                 return f"TCPIP::{device_ip}::inst0,{addr}::INSTR"
             else:
                 return f"TCPIP::{device_ip}::gpib0,{addr}::INSTR"
-        raise ValueError(f"Unknown visa_type: {visa_type}. Must be one of 'socket', 'hislip', 'vxi11', or 'gateway'.")
+        raise ValueError(f"Unknown resource_type: {resource_type}. Must be one of 'socket', 'hislip', 'vxi11', or 'gateway'.")
 
     def discover_visa_devices(self, query_id: bool = False) -> list[str]:
         """Discover the VISA TCPIP devices auto discoverable by this system.
@@ -319,7 +319,7 @@ class visadevice_base(object):
             self._inst_contexts[inst_nr]["inst"] = None
             self._inst_contexts[inst_nr]["address"] = addr
             self._inst_contexts[inst_nr]["resource_name"] = self.get_resourcename_for_instrument(
-                self.device_ip, self.visa_provider, addr, self.visa_type, self.visa_port
+                self.device_ip, self.visa_provider, addr, self.resource_type, self.visa_port
             )
             self._inst_contexts[inst_nr]["cmds_init"] = []
 

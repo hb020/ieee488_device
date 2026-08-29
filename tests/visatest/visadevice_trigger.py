@@ -37,9 +37,9 @@ class visadevice_trigger(visadevice_base.visadevice_base):
         return True
     
     def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
-        if self.visa_type in ["socket"]:
+        if self.resource_type in ["socket"]:
             # cannot do trigger stuff over socket
-            return { "reason": f"Triggering is not supported on {self.visa_type} instruments" }
+            return { "reason": f"Triggering is not supported on {self.resource_type} instruments" }
         
         rv = super().get_instrument_commands(inst_nr, idn, test)
         

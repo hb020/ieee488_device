@@ -31,7 +31,7 @@ class visadevice_end(visadevice_base.visadevice_base):
             inst.write(cmd_goto_eos)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, True)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR, ord("\n"))
-        if self.visa_type != "socket":
+        if self.resource_type != "socket":
             # socket does not support the SEND_END_EN attribute, so skip it for those backends
             inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, False)
         try:
@@ -44,7 +44,7 @@ class visadevice_end(visadevice_base.visadevice_base):
         if (len(cmd_goto_eoi) > 0):
             inst.write(cmd_goto_eoi)
         inst.set_visa_attribute(pyvisa.constants.VI_ATTR_TERMCHAR_EN, False)
-        if self.visa_type != "socket":
+        if self.resource_type != "socket":
             # socket does not support the SEND_END_EN attribute, so skip it for those backends
             inst.set_visa_attribute(pyvisa.constants.VI_ATTR_SEND_END_EN, True)
         try:                

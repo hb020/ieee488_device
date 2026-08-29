@@ -235,20 +235,20 @@ def main():
         tests_to_run = [DEFAULT_TEST]
 
     device_ip = args.device_ip
-    visa_type = args.type
+    resource_type = args.type
     port = args.port
-    if visa_type == "socket":
+    if resource_type == "socket":
         addresses = "0"  # socket type does not use addresses, but we need to pass something to the test classes.
 
     if isinstance(addresses, int):
         addresses = str(addresses)
-    address_list = visadevice_base.validate_instrument_addresses(addresses, visa_type)
+    address_list = visadevice_base.validate_instrument_addresses(addresses, resource_type)
     if address_list is None:
         logger.error(f"Invalid instrument addresses: {addresses}")
         sys.exit(1)
 
     base_connstring = visadevice_base.get_resourcename_for_instrument(
-        device_ip, visa_provider if visa_provider else "default", "{addr}", visa_type, port
+        device_ip, visa_provider if visa_provider else "default", "{addr}", resource_type, port
     )
     logger.info(
         f"Using connection: '{base_connstring}', addresses: '{addresses}', VISA provider: '{visa_provider if visa_provider else 'default'}', tests to run: {tests_to_run if tests_to_run != [0] else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}"
@@ -262,7 +262,7 @@ def main():
     for i, (tester, step, global_test_nr, local_test_nr) in enumerate(test_steps):
         if global_test_nr in tests_to_run or 0 in tests_to_run:
             try:
-                t = tester(visa_provider, device_ip, addresses, visa_type, port, options)
+                t = tester(visa_provider, device_ip, addresses, resource_type, port, options)
             except Exception as e:
                 logger.error(
                     f"Failed to get resource manager for VISA provider '{visa_provider if visa_provider else 'default'}': {e}"

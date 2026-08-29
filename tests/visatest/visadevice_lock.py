@@ -57,9 +57,9 @@ class visadevice_lock(visadevice_base.visadevice_base):
             return False
     
     def get_instrument_commands(self, inst_nr: int, idn: str, test: int) -> dict:
-        if self.visa_type in ["socket"]:
+        if self.resource_type in ["socket"]:
             # cannot do lock stuff over socket
-            return { "reason": f"Locking is not supported on {self.visa_type} instruments" }
+            return { "reason": f"Locking is not supported on {self.resource_type} instruments" }
         
         return super().get_instrument_commands(inst_nr, idn, test)
 
@@ -94,14 +94,17 @@ class visadevice_lock(visadevice_base.visadevice_base):
                 am_opened = True                
                 am_locked = False
                 inst.timeout = timeout
-                if self.visa_provider == "py" and (self.visa_type == "vxi11" or self.visa_type == "gateway"):
+                if self.visa_provider == "py" and (self.resource_type == "vxi11" or self.resource_type == "gateway"):
                     VI_KTATTR_LOCKWAIT = 0x0FFF002B
                     if timeout == 0:
                         inst.set_visa_attribute(VI_KTATTR_LOCKWAIT, 0)
                     else:
                         inst.set_visa_attribute(VI_KTATTR_LOCKWAIT, 1)
                     # self.rm.visalib.sessions[inst.session].lock_timeout = timeout  # legacy
-                inst.write("*CLS")
+                if self.resource_type == "hislip":
+                    r = inst.query("*IDN?")
+                else:
+                    inst.write("*CLS")
             if expect_to_fail:
                 # self.logger.error(f"{testname}: Opened an already locked resource, but should have failed.")
                 try:
@@ -126,7 +129,11 @@ class visadevice_lock(visadevice_base.visadevice_base):
                 )
             ):
                 # print("SUCCESS: Failed to open locked resource, as expected.")
-                if e.error_code != pyvisa.constants.VI_ERROR_RSRC_LOCKED:
+                if lock_on_open or lock_after_open:
+                    expected_err = [pyvisa.constants.VI_ERROR_RSRC_LOCKED]
+                else:
+                    expected_err = [pyvisa.constants.VI_ERROR_RSRC_LOCKED, pyvisa.constants.VI_ERROR_TMO]                    
+                if e.error_code not in expected_err:
                     e_wanted = "VI_ERROR_RSRC_LOCKED"
                     e_got = e.error_code
                     if e.error_code == pyvisa.constants.VI_ERROR_RSRC_BUSY:
@@ -183,13 +190,15 @@ class visadevice_lock(visadevice_base.visadevice_base):
             
         duration_secs = (end_time - start_time).total_seconds()
         if success:
-            desired_min_duration = max(timeout * 0.8, 0)  # Allowing a 20% margin for timing variations
-            desired_max_duration = max(timeout * 1.5, 0.2) + extra_time  # Allowing a 50% margin for timing variations, plus extra time if specified
-            if duration_secs < desired_min_duration:
+            # compare times based on ints. floats are messy
+            desired_min_duration_ms = int(max(timeout * 0.8, 0) * 1000)  # Allowing a 20% margin for timing variations
+            desired_max_duration_ms = int(max(timeout * 1.5, 0.2) * 1000) + int(extra_time * 1000)  # Allowing a 50% margin for timing variations, plus extra time if specified
+            duration_secs_ms = int(duration_secs * 1000)
+            if duration_secs_ms < desired_min_duration_ms:
                 self.logger.warning(
                     f"{new_testname}: rejection was respected, but faster than expected: {duration_secs:.1f} seconds (< {desired_min_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
                 )
-            elif duration_secs > desired_max_duration:
+            elif duration_secs_ms > desired_max_duration_ms:
                 self.logger.warning(
                     f"{new_testname}: rejection was respected, but slower than expected: {duration_secs:.1f} seconds (> {desired_max_duration:.1f} seconds). This might indicate a problem with the locking mechanism."
                 )
