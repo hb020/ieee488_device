@@ -38,8 +38,9 @@ Usage:
 ```text
 python3 visatest -h
 usage: python3 visatest [-h] [-t {vxi11,hislip,socket,gateway}] [-p PORT] [-a ADDRESSES] [-V {py,ni,keysight,rs}]
-                        [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}] [-cs] [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]] [--info]
-                        [device_ip]
+                                 [-T {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19} [{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19} ...]] [-cs]
+                                 [-L {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--discover [id]] [--info] [--attributes]
+                                 [device_ip]
 
 Test VXI-11.2 gateways and other VISA devices
 
@@ -53,15 +54,16 @@ options:
   -p, --port PORT       The port to use for the device. Default is 0, which means the default port for the device type.
                         This is only used for socket and hislip types, and their default ports are respectively 5025 and 4880.
   -a, --addresses ADDRESSES
-                        The addresses on the bus, separated by ';'.
+                        The addresses on the bus, separated by ';'. Default is 0.
                         Addresses may contain secondary addresses, in which case the format is '{primary},{secondary}'.
                         Examples: '1' or '1;2,0;2,1'.
-                        Is ignored for socket type.
+                        Is ignored for socket type, and should normally be 0 for hislip and vxi-11.
   -V, --visa-provider {py,ni,keysight,rs}
                         The VISA provider to use. Default is the system default.
                         Use 'py' for pyvisa-py, 'ni' for NI-Visa, 'keysight' for Agilent/Keysight Visa, 'rs' for R&S Visa.
                         To see what VISA providers are available on your system, run 'pyvisa-info' or run this program with '--info' (same thing).
-  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
+  -T, --test {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19} [{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19} ...]
+                        One or more test numbers to run (separated by spaces). Valid values are 0, or 1..19.
                          0 All
                          1 Basic
                          2 End conditions: EOS
@@ -91,6 +93,8 @@ options:
                         The result will also print the output from '*IDN?' if you specify 'id'. This may however disturb older devices.
   --info                Print information about the VISA providers available on this system, and exit.
                         This is equivalent to running 'pyvisa-info'.
+  --attributes          Print information about the VISA attributes of the instrument, and exit.
+                        If provided, this uses the log level setting, the visa provider setting, the type and the device IP.
 ```
 
 ## Status
