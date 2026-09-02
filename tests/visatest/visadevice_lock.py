@@ -191,8 +191,10 @@ class visadevice_lock(visadevice_base.visadevice_base):
         duration_secs = (end_time - start_time).total_seconds()
         if success:
             # compare times based on ints. floats are messy
-            desired_min_duration_ms = int(max(timeout * 0.8, 0) * 1000)  # Allowing a 20% margin for timing variations
-            desired_max_duration_ms = int(max(timeout * 1.5, 0.2) * 1000) + int(extra_time * 1000)  # Allowing a 50% margin for timing variations, plus extra time if specified
+            desired_min_duration = max(timeout * 0.8, 0)   # Allowing a 20% margin for timing variations
+            desired_max_duration = max(timeout * 1.5, 0.2) + extra_time  # Allowing a 50% margin for timing variations, plus extra time if specified
+            desired_min_duration_ms = int(desired_min_duration * 1000)
+            desired_max_duration_ms = int(desired_max_duration * 1000)
             duration_secs_ms = int(duration_secs * 1000)
             if duration_secs_ms < desired_min_duration_ms:
                 self.logger.warning(

@@ -19,6 +19,8 @@
 # TODO:
 # ppoll, via DOCMD. Few gateways support that.
 #
+import resource
+
 import pyvisa.util
 
 from visadevice_base import visadevice_base
@@ -30,6 +32,7 @@ from visadevice_delay import visadevice_delay
 from visadevice_lock import visadevice_lock
 from visadevice_trigger import visadevice_trigger
 from visadevice_remotelocal import visadevice_remotelocal
+from visadevice_attributes import visadevice_attributes
 import logging
 import argparse
 import sys
@@ -70,6 +73,7 @@ def main():
         visadevice_lock,
         visadevice_trigger,
         visadevice_remotelocal,
+        # visadevice_attributes, # not included in the tests
     ]
     # the file names. Not much logging in their name, but anyway.
     logger_names = [
@@ -82,6 +86,7 @@ def main():
         "visadevice_lock",
         "visadevice_trigger",
         "visadevice_remotelocal",
+        "visadevice_attributes", # included in the logs
     ]
     # the array of testers, indexed by test number. The first tester is the base tests, the second is the SRQ tests.
     test_steps = []
@@ -170,6 +175,12 @@ def main():
         action="store_true",
         help="Print information about the VISA providers available on this system, and exit.\nThis is equivalent to running 'pyvisa-info'.",
     )
+    
+    parser.add_argument(
+        "--attributes",
+        action="store_true",
+        help="Print information about the VISA attributes of the instrument, and exit.\nIf provided, this uses the log level setting, the visa provider setting, the type and the device IP.",
+    )
 
     options = {}
     args = parser.parse_args()
@@ -253,6 +264,21 @@ def main():
     logger.info(
         f"Using connection: '{base_connstring}', addresses: '{addresses}', VISA provider: '{visa_provider if visa_provider else 'default'}', tests to run: {tests_to_run if tests_to_run != [0] else 'all'}, auto chunk size: {options['auto_chunk_size']}, log level: {args.log_level}"
     )
+
+    if args.attributes:
+        # connect
+        try:
+            t = visadevice_attributes(visa_provider, device_ip, addresses, resource_type, port, options)
+        except Exception as e:
+            logger.error(
+                f"Failed to get resource manager for VISA provider '{visa_provider if visa_provider else 'default'}': {e}"
+            )
+            sys.exit(1)
+        t.run(0)
+        t.close()
+        
+        sys.exit(0)
+        
 
     # determine tests to run
     ok = True
