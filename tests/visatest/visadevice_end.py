@@ -70,6 +70,7 @@ class visadevice_end(visadevice_base.visadevice_base):
         #     - Device: listens to EOI during read
         #   when not using EOI, but using EOS:
         #     - VXI-11.2 client: TODO: pyvisa-py will add 'end flag' to device_write, NI-VISA also ??
+        #     - HiSLIP: EOI is required, although instruments may use timeouts to still accept the write. A timeout is expected in this test setup.
         #     - Gateway: adds EOI to the end of the message. The message may contain an EOS character, but the gateway will not use it to determine end of message
         #     - Device: listens to EOI AND EOS during read
         #
@@ -114,8 +115,11 @@ class visadevice_end(visadevice_base.visadevice_base):
                         self.logger.error(f"{testname} instrument nr {inst_nr}: expected \"{expected}\", got \"{r}\"")
                         rv = False
             except Exception as e:
-                self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
-                rv = False
+                if self.resource_type == "hislip" and getattr(e, "error_code", None) == pyvisa.constants.StatusCode.error_timeout:
+                    self.logger.debug(f"{testname} instrument nr {inst_nr}: HiSLIP timed out, as expected in this test setup")
+                else:    
+                    self.logger.error(f"{testname} instrument nr {inst_nr}: exception: {e}")
+                    rv = False
                 
             self.set_instrument_to_eoi(inst, cmd_goto_eoi)
             return rv
